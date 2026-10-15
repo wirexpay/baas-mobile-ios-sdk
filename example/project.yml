@@ -13,7 +13,7 @@ options:
   bundleIdPrefix: com.wirexapp.baas
   deploymentTarget:
     # The SDK's floor.
-    iOS: "13.0"
+    iOS: "15.0"
   createIntermediateGroups: true
 
 packages:

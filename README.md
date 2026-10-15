@@ -14,7 +14,7 @@ Use of the SDK requires an agreement with Wirex. See [LICENSE](LICENSE).
 
 ## Requirements
 
-- iOS 13 or later.
+- iOS 15 or later.
 - Xcode 26.5 or later. The framework's module interface can be read only by the compiler that built
   it or a later one.
 
@@ -31,7 +31,7 @@ https://github.com/wirexpay/baas-mobile-ios-sdk
 Or in `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/wirexpay/baas-mobile-ios-sdk", from: "0.3.1")
+.package(url: "https://github.com/wirexpay/baas-mobile-ios-sdk", from: "0.3.7")
 ```
 
 Then add the `WirexMobileSDK` product to your target.
@@ -39,7 +39,7 @@ Then add the `WirexMobileSDK` product to your target.
 ### CocoaPods
 
 ```ruby
-pod 'WirexMobileSDK', '~> 0.3.1'
+pod 'WirexMobileSDK', '~> 0.3.7'
 ```
 
 Both install the same `WirexMobileSDK.xcframework`, attached to the GitHub release of each version.

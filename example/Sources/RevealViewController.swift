@@ -12,8 +12,8 @@ import WirexMobileSDK
 ///  - the composite rows the SDK draws: label, sealed value, and its own copy button
 ///  - masked by default, with an explicit reveal
 ///  - light/dark theme resolution, and host tokens overriding it
-///  - the partial-failure rule: under scenario `cvv_fails` the CVV row shows its placeholder while
-///    the session stays ready, because the PAN did load
+///  - the partial-failure rule: when one field fails (say the CVV), its row shows the placeholder while
+///    the session stays ready, because the other fields did load
 ///  - capture-protection state, reported per row
 ///
 /// What it deliberately cannot do, and no amount of example code would change: read a value back.
@@ -546,7 +546,7 @@ final class RevealViewController: UIViewController {
         credentialsStatus.text = LiveConfig.shared.credentialsStatus()
     }
 
-    /// `UIAction` is iOS 14+, and this example builds against the SDK's iOS 13 floor — the same
+    /// `UIAction` is iOS 14+, and this example builds against the SDK's iOS 15 floor — the same
     /// constraint that made the SDK grow its own `ClosureButton`.
     private func buttonRow(_ actions: [(String, () -> Void)]) -> UIStackView {
         let stack = UIStackView()
