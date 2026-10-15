@@ -10,6 +10,8 @@ Wirex card and wallet features for a partner iOS app. The partner app never hand
 
 Use of the SDK requires an agreement with Wirex. See [LICENSE](LICENSE).
 
+📖 **Integration guide:** https://wirexpay.github.io/baas-mobile-ios-sdk/ — and a runnable example in [`example/`](example/).
+
 ## Requirements
 
 - iOS 13 or later.
