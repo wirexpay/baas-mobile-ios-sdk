@@ -23,6 +23,7 @@ final class ConfigViewController: UIViewController {
         FieldSpec(key: "wallet", label: "User wallet", hint: "X-User-Wallet (EOA)", secure: false),
         FieldSpec(key: "cardId", label: "Card ID", hint: "the card Reveal / Collect act on", secure: false),
         FieldSpec(key: "cardholderName", label: "Cardholder name", hint: nil, secure: false),
+        FieldSpec(key: "baasApiUrl", label: "BaaS API URL", hint: "for the Wallet \u{201C}Fetch estimate\u{201D} helper", secure: false),
     ]
     private static let secrets: [FieldSpec] = [
         FieldSpec(key: "bearer", label: "Bearer token", hint: "getAccessToken — Wirex bearer for the user", secure: true),

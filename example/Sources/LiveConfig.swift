@@ -48,7 +48,7 @@ final class LiveConfig {
     func applyCredentials(json: String) -> ConfigOutcome {
         guard let parsed = Self.parse(json) else { return .rejected("not valid JSON") }
 
-        let known = ["environment", "bearer", "email", "wallet", "cardId", "chainId", "actionToken", "cardholderName"]
+        let known = ["environment", "bearer", "email", "wallet", "cardId", "chainId", "actionToken", "cardholderName", "baasApiUrl"]
         var applied: [String] = []
         var cleared: [String] = []
         var unknown: [String] = []

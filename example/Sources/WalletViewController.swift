@@ -338,6 +338,7 @@ final class WalletViewController: UIViewController {
             actionButton("Sample (shape only)", action: #selector(insertSample)),
             caption("Quote"),
             labeledRow("estimationId", estimationIdField),
+            actionButton("Fetch estimate", action: #selector(fetchEstimate)),
             labeledRow("source", sourceAmountField, sourceCurrencyField),
             labeledRow("destination", destinationAmountField, destinationCurrencyField),
             labeledRow("fee", feeAmountField),
@@ -363,6 +364,103 @@ final class WalletViewController: UIViewController {
             stack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -16),
             stack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -32),
         ])
+    }
+
+    // MARK: - Fetch estimate (verify a bearer; what your backend does)
+
+    @objc private func fetchEstimate() {
+        Task { await performFetchEstimate() }
+    }
+
+    /// Prices a top-up with the documented Wirex BaaS API using the bearer on the Config tab, and fills
+    /// the estimation id. Pricing a top-up is the partner backend's job; this is a convenience to
+    /// verify a token and get a real id without a backend. The SDK only consumes the id.
+    private func performFetchEstimate() async {
+        let cfg = LiveConfig.shared
+        let base = cfg.credential("baasApiUrl")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "/+$", with: "", options: .regularExpression)
+        let bearer = cfg.credential("bearer")
+        let chainId = cfg.credential("chainId")
+        let wallet = cfg.credential("wallet")
+        let email = cfg.credential("email")
+        guard !base.isEmpty, !bearer.isEmpty else {
+            log.append("Fetch estimate: set BaaS API URL + bearer on the Config tab")
+            return
+        }
+        var headers = ["Authorization": "Bearer \(bearer)", "X-Chain-Id": chainId, "Content-Type": "application/json"]
+        if !wallet.isEmpty {
+            headers["X-User-Wallet"] = wallet
+        } else if !email.isEmpty {
+            headers["X-User-Email"] = email
+        } else {
+            log.append("Fetch estimate: set a user wallet or email on the Config tab")
+            return
+        }
+        let currency = text(destinationCurrencyField, fallback: "EUR")
+        let amount = text(destinationAmountField, fallback: "100.00")
+        do {
+            let (address, decimals) = try await resolveSettlementToken(base: base, headers: headers, currency: currency)
+            let estimationId = try await postEstimate(base: base, headers: headers, amount: amount, decimals: decimals, tokenAddress: address)
+            await MainActor.run {
+                self.estimationIdField.text = estimationId
+                self.log.append("estimate: \(estimationId)")
+            }
+        } catch {
+            await MainActor.run { self.log.append("estimate failed: \(error.localizedDescription)") }
+        }
+    }
+
+    private func resolveSettlementToken(base: String, headers: [String: String], currency: String) async throws -> (String, Int) {
+        var req = URLRequest(url: URL(string: "\(base)/api/v1/config/tokens")!)
+        headers.forEach { req.setValue($0.value, forHTTPHeaderField: $0.key) }
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
+            throw NSError(domain: "estimate", code: 1, userInfo: [NSLocalizedDescriptionKey: "GET /config/tokens failed"])
+        }
+        let json = try JSONSerialization.jsonObject(with: data)
+        let rows: [[String: Any]] = (json as? [[String: Any]]) ?? ((json as? [String: Any])?["data"] as? [[String: Any]]) ?? []
+        for row in rows {
+            let equiv = row["equivalent_symbols"] as? [String] ?? []
+            let symbol = row["symbol"] as? String ?? ""
+            if equiv.contains(currency) || symbol.hasSuffix(currency) {
+                let address = (row["address"] as? String) ?? (row["contract_address"] as? String) ?? ""
+                let decimals = row["decimals"] as? Int ?? 18
+                return (address, decimals)
+            }
+        }
+        throw NSError(domain: "estimate", code: 2, userInfo: [NSLocalizedDescriptionKey: "no settlement token for \(currency)"])
+    }
+
+    private func postEstimate(base: String, headers: [String: String], amount: String, decimals: Int, tokenAddress: String) async throws -> String {
+        var req = URLRequest(url: URL(string: "\(base)/api/v1/cards/topup/estimate")!)
+        req.httpMethod = "POST"
+        headers.forEach { req.setValue($0.value, forHTTPHeaderField: $0.key) }
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "destination_amount": Self.toBaseUnits(amount, decimals: decimals),
+            "destination_token_address": tokenAddress,
+            "payment_method": "apple_pay",
+        ])
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            throw NSError(domain: "estimate", code: 3, userInfo: [NSLocalizedDescriptionKey: "POST /cards/topup/estimate failed: \(body)"])
+        }
+        let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let id = obj?["estimation_id"] as? String else {
+            throw NSError(domain: "estimate", code: 4, userInfo: [NSLocalizedDescriptionKey: "no estimation_id in response"])
+        }
+        return id
+    }
+
+    /// display amount (e.g. "100.00") → base-units string (amount * 10^decimals), without float loss.
+    private static func toBaseUnits(_ amount: String, decimals: Int) -> String {
+        let parts = amount.split(separator: ".", maxSplits: 1, omittingEmptySubsequences: false)
+        let whole = parts.first.map(String.init) ?? "0"
+        let frac = parts.count > 1 ? String(parts[1]) : ""
+        let fracPadded = String((frac + String(repeating: "0", count: decimals)).prefix(decimals))
+        let scaled = String((whole + fracPadded).drop(while: { $0 == "0" }))
+        return scaled.isEmpty ? "0" : scaled
     }
 
     private func configureField(_ field: UITextField, text: String) {
