@@ -1,0 +1,12 @@
+# Xcode / XcodeGen (project is generated: `xcodegen generate`)
+*.xcodeproj/
+*.xcworkspace/
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+# CocoaPods
+Pods/
+Podfile.lock
+# macOS
+.DS_Store
