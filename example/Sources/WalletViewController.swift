@@ -70,7 +70,7 @@ final class WalletViewController: UIViewController {
 
     init() {
         do {
-            let environment = try WirexWalletEnvironment.resolve(WirexSdkConfig.environment)
+            let environment = try WirexWalletEnvironment.resolve(LiveConfig.shared.environment)
             self.config = WirexWalletConfig(
                 environment: environment,
                 clientId: nil,
@@ -81,7 +81,7 @@ final class WalletViewController: UIViewController {
         } catch {
             self.config = nil
             self.unavailableReason =
-                "Wallet environment '\(WirexSdkConfig.environment)' is not available in this build: \(error)"
+                "Wallet environment '\(LiveConfig.shared.environment)' is not available in this build: \(error)"
         }
         super.init(nibName: nil, bundle: nil)
     }

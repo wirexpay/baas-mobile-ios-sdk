@@ -72,8 +72,6 @@ final class RevealViewController: UIViewController {
     private var rows: [WirexRevealField: WirexRevealFieldView] = [:]
 
     private let rowStack = UIStackView()
-    private let credentialsField = UITextView()
-    private let credentialsStatus = UILabel()
     private let statusLabel = UILabel()
     private let scrollView = UIScrollView()
 
@@ -94,13 +92,13 @@ final class RevealViewController: UIViewController {
     private static func configuredEnvironment() -> Result<WirexEnvironment, WirexEnvironmentUnavailable> {
         do {
             return .success(try WirexEnvironment.resolve(
-                WirexSdkConfig.environment,
+                LiveConfig.shared.environment,
                 chainId: LiveConfig.shared.credential("chainId")
             ))
         } catch let unavailable as WirexEnvironmentUnavailable {
             return .failure(unavailable)
         } catch {
-            return .failure(.unknownName(name: WirexSdkConfig.environment, known: WirexEnvironment.allNames))
+            return .failure(.unknownName(name: LiveConfig.shared.environment, known: WirexEnvironment.allNames))
         }
     }
 
@@ -173,7 +171,7 @@ final class RevealViewController: UIViewController {
         // repository, not a fault — and the screen has to say so rather than die or draw rows that
         // cannot load.
         guard reveal != nil else {
-            let message = unavailableView(unavailable ?? .notBuilt(name: WirexSdkConfig.environment, variables: []))
+            let message = unavailableView(unavailable ?? .notBuilt(name: LiveConfig.shared.environment, variables: []))
             message.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview(message)
             NSLayoutConstraint.activate([
@@ -219,6 +217,13 @@ final class RevealViewController: UIViewController {
             name: LiveConfig.appearanceDidChange,
             object: nil
         )
+        // A value typed on the Config tab: rebuild the session if the card it captured changed.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(credentialsDidChange),
+            name: LiveConfig.credentialsDidChange,
+            object: nil
+        )
     }
 
     @objc private func dismissKeyboard() {
@@ -228,6 +233,14 @@ final class RevealViewController: UIViewController {
     /// A restyle only: it must never change `isMasked`, re-fetch, or reveal.
     @objc private func appearanceDidChange() {
         restyle()
+    }
+
+    /// A credential typed on the Config tab. Rebuilds the session only when the captured identity
+    /// (card id / cardholder) changed — the bearer and action token are read lazily, so they need no
+    /// rebuild. A no-op until an environment resolved, since there is no session to rebuild.
+    @objc private func credentialsDidChange() {
+        guard reveal != nil else { return }
+        recreateSessionIfIdentityChanged()
     }
 
     // MARK: - Session
@@ -425,7 +438,6 @@ final class RevealViewController: UIViewController {
                         }),
                        ("New session", { [weak self] in
                             self?.createSession()
-                            self?.refreshCredentialsStatus()
                         }),
                        ("Decline next", { [weak self] in
                             self?.credentials.declineNextActionToken = true
@@ -437,7 +449,6 @@ final class RevealViewController: UIViewController {
 
         let content = UIStackView(arrangedSubviews: [
             title, subtitle, rowStack, statusLabel, controls,
-            buildCredentialsPanel(),
         ])
         content.axis = .vertical
         content.spacing = 16
@@ -461,90 +472,7 @@ final class RevealViewController: UIViewController {
         ])
     }
 
-    // MARK: - Runtime configuration panels
-
-    /// A header that shows and hides its body. Collapsed by default: this is operator plumbing, and
-    /// the point of the screen is the rows above it.
-    private func buildPanel(title: String, body: UIView) -> UIView {
-        body.isHidden = true
-        let header = ClosureButton(title: "▸ \(title)") { }
-        header.contentHorizontalAlignment = .leading
-        header.onTap = { [weak header] in
-            body.isHidden.toggle()
-            header?.setTitle("\(body.isHidden ? "▸" : "▾") \(title)", for: .normal)
-        }
-
-        let panel = UIStackView(arrangedSubviews: [header, body])
-        panel.axis = .vertical
-        panel.spacing = 8
-        return panel
-    }
-
-    private func textArea(_ placeholder: String) -> UITextView {
-        let view = UITextView()
-        view.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        borders.track(view)
-        view.autocorrectionType = .no
-        view.autocapitalizationType = .none
-        view.text = placeholder
-        view.heightAnchor.constraint(equalToConstant: 96).isActive = true
-        return view
-    }
-
-    /// Paste any subset of the keys. Absent keys keep their current values, so an expired
-    /// `actionToken` is replaced by pasting only that one — no rebuild, nothing else disturbed.
-    private func buildCredentialsPanel() -> UIView {
-        credentialsField.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        borders.track(credentialsField)
-        credentialsField.autocorrectionType = .no
-        credentialsField.autocapitalizationType = .none
-        // SECURITY-adjacent: iOS substitutes curly quotes and en/em dashes by default. A JWT is
-        // base64url — it contains `-` and `_` — and JSON needs straight quotes, so leaving these on
-        // lets an edit silently corrupt a pasted credential into something that still parses as
-        // JSON but is rejected by the backend as an invalid token.
-        credentialsField.smartQuotesType = .no
-        credentialsField.smartDashesType = .no
-        credentialsField.smartInsertDeleteType = .no
-        credentialsField.text = #"{ "actionToken": "" }"#
-        credentialsField.heightAnchor.constraint(equalToConstant: 110).isActive = true
-
-        credentialsStatus.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
-        credentialsStatus.numberOfLines = 0
-        credentialsStatus.textColor = .secondaryLabel
-        refreshCredentialsStatus()
-
-        let hint = UILabel()
-        hint.font = .systemFont(ofSize: 10)
-        hint.textColor = .secondaryLabel
-        hint.numberOfLines = 0
-        hint.text = "keys: bearer · email · wallet · cardId · actionToken · cardholderName — merged, absent kept"
-
-        let apply = ClosureButton(title: "Apply credentials") { [weak self] in
-            guard let self else { return }
-            switch LiveConfig.shared.applyCredentials(json: self.credentialsField.text) {
-            case .merged(let summary):
-                self.flash(summary)
-                self.refreshCredentialsStatus()
-                // A session captures `cardId` and `cardholderName` at creation; only the bearer and
-                // the action token are read lazily per call. So pasting a corrected card id and
-                // pressing Load kept using the OLD one — the request went to `/v1/cards//details`
-                // and pan, expiry and cvv all failed, while the panel showed fresh credentials.
-                // Rebuilding here is what "apply" has to mean.
-                self.recreateSessionIfIdentityChanged()
-            case .rejected(let reason):
-                self.flash("credentials: \(reason)")
-            }
-        }
-
-        let body = UIStackView(arrangedSubviews: [hint, credentialsField, apply, credentialsStatus])
-        body.axis = .vertical
-        body.spacing = 8
-        return buildPanel(title: "Credentials (JSON)", body: body)
-    }
-
-    private func refreshCredentialsStatus() {
-        credentialsStatus.text = LiveConfig.shared.credentialsStatus()
-    }
+    // MARK: - Buttons
 
     /// `UIAction` is iOS 14+, and this example builds against the SDK's iOS 15 floor — the same
     /// constraint that made the SDK grow its own `ClosureButton`.

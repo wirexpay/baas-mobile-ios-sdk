@@ -48,7 +48,7 @@ final class LiveConfig {
     func applyCredentials(json: String) -> ConfigOutcome {
         guard let parsed = Self.parse(json) else { return .rejected("not valid JSON") }
 
-        let known = ["bearer", "email", "wallet", "cardId", "chainId", "actionToken", "cardholderName"]
+        let known = ["environment", "bearer", "email", "wallet", "cardId", "chainId", "actionToken", "cardholderName"]
         var applied: [String] = []
         var cleared: [String] = []
         var unknown: [String] = []
@@ -80,6 +80,41 @@ final class LiveConfig {
         // Named rather than ignored: a typo in a key would otherwise look like a successful paste.
         if !unknown.isEmpty { summary += " · IGNORED unknown: \(unknown.sorted().joined(separator: ", "))" }
         return .merged(summary)
+    }
+
+    /// Posted whenever a credential / identity value changes, so a screen can rebuild. Separate from
+    /// `appearanceDidChange`: a credential change may have to rebuild a session or a form, an
+    /// appearance change must never do either.
+    static let credentialsDidChange = Notification.Name("wirex.example.credentialsDidChange")
+
+    private func announceCredentialsChange() {
+        DispatchQueue.main.async { NotificationCenter.default.post(name: Self.credentialsDidChange, object: nil) }
+    }
+
+    /// Writes a single key — the per-field Config tab's edit. An EMPTY value CLEARS the key, matching
+    /// `applyCredentials`. `notify` is false while a field is mid-edit (every keystroke) and true when
+    /// it ends, so a screen rebuilds once on blur rather than on every character.
+    func setCredential(_ key: String, _ value: String, notify: Bool = true) {
+        lock.wirexWithLock {
+            if value.isEmpty { credentials.removeValue(forKey: key) } else { credentials[key] = value }
+        }
+        if notify { announceCredentialsChange() }
+    }
+
+    /// The SDK environment NAME the Config tab selected, defaulting to `test`. A name, never a URL —
+    /// the SDK resolves it to the hosts it ships with.
+    var environment: String {
+        let value = credential("environment")
+        return value.isEmpty ? "test" : value
+    }
+
+    /// `test` everywhere but the production name — mirrors `exampleConfig.ts`.
+    var isTestMode: Bool { environment != "production" }
+
+    /// Clears every credential / identity value back to empty (environment falls back to `test`).
+    func resetCredentials() {
+        lock.wirexWithLock { credentials.removeAll() }
+        announceCredentialsChange()
     }
 
     /// Per-key presence, and for JWTs whether they are still valid. The expiry check is the point:

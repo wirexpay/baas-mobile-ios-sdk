@@ -17,28 +17,28 @@ open WirexMobileSdkExample.xcodeproj
 
 Build and run on a simulator or device from Xcode.
 
-## The environment
+## Configure on device
 
-`Sources/SdkConfig.swift` holds the environment NAME this build talks to (a name, never a URL — the SDK
-maps it onto the hosts it holds). Set it to the environment Wirex assigned (`test` or `production`).
+Nothing is compiled in. The **Config** tab is a per-field editor over `LiveConfig`, the single store
+every surface reads live — type a value and the next call picks it up, no rebuild. It holds:
 
-## Enter credentials on device
+- the **environment** (`test` / `production`), a name the SDK maps onto the hosts it ships with;
+- integration parameters — chain id, user email, user wallet, card id, cardholder name;
+- secrets (bearer, step-up action token), held in memory only and never persisted or logged.
 
-Nothing is compiled in. Each surface reads the credentials from `LiveConfig`, which you fill at runtime:
-
-**Paste JSON** on the Reveal or Collect screen (the "credentials" box), e.g.
-`{"bearer":"…","email":"…","cardId":"…","chainId":"…","actionToken":"…","cardholderName":"…"}` — a
-key you omit keeps its value; an empty string clears it. Credentials are never passed on the command
-line — a bearer in a process's argument vector is visible in `ps` and in logs.
+Credentials are never passed on the command line — a bearer in a process's argument vector is visible
+in `ps` and in logs.
 
 ## The surfaces
 
 | Tab | What it shows |
 |---|---|
+| **Config** | a per-field editor for the environment, integration parameters and secrets, shared by every surface |
 | **Reveal** | the cardholder's own PAN / expiry / CVV / PIN in sealed native rows |
 | **Collect** | a sealed form that tokenizes an external funding card at the acquirer |
 | **3DS** | paste a top-up orchestrator URL → the issuer challenge, and the outcome |
 | **Wallet** | an availability probe + the hosted Apple Pay / Google Pay checkout (paste a provider block, build a quote; token mode via a checkout token) |
+| **Appearance** | restyle every sealed surface at once — presets or a pasted token document |
 
 The field contract is the same across the React Native / Android / Flutter examples — see
 `../PARTNER-CONFIG.md`.

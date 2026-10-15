@@ -49,8 +49,6 @@ final class CollectViewController: UIViewController {
     private let formHolder = UIView()
     private let stateLabel = UILabel()
     private let resultLabel = UILabel()
-    private let credentialsField = UITextView()
-    private let credentialsStatus = UILabel()
     private var tokenizeButton = UIButton(type: .system)
     private let profiles = UISegmentedControl(items: ["topup", "oct-destination"])
 
@@ -66,9 +64,21 @@ final class CollectViewController: UIViewController {
             name: LiveConfig.appearanceDidChange,
             object: nil
         )
+        // A value typed on the Config tab: rebuild the form so the fresh environment / chainId /
+        // credentials take effect. A rebuild clears what is typed, which is honest here — the
+        // connection the form talks over has changed.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(credentialsDidChange),
+            name: LiveConfig.credentialsDidChange,
+            object: nil
+        )
         scroll.keyboardDismissMode = .interactive
         rebuildForm()
-        refreshStatus()
+    }
+
+    @objc private func credentialsDidChange() {
+        rebuildForm()
     }
 
     private var hasFocusedOnce = false
@@ -94,14 +104,14 @@ final class CollectViewController: UIViewController {
         let environment: WirexEnvironment
         do {
             environment = try WirexEnvironment.resolve(
-                WirexSdkConfig.environment,
+                LiveConfig.shared.environment,
                 chainId: LiveConfig.shared.credential("chainId")
             )
         } catch let unavailable as WirexEnvironmentUnavailable {
             resultLabel.text = String(describing: unavailable)
             return
         } catch {
-            resultLabel.text = "Unknown environment '\(WirexSdkConfig.environment)'"
+            resultLabel.text = "Unknown environment '\(LiveConfig.shared.environment)'"
             return
         }
         let collect = WirexCollect(
@@ -247,24 +257,9 @@ final class CollectViewController: UIViewController {
         applyStrings()
     }
 
-    @objc private func applyCredentials() {
-        switch LiveConfig.shared.applyCredentials(json: credentialsField.text) {
-        case let .merged(summary):
-            credentialsStatus.text = summary
-            rebuildForm()
-        case let .rejected(reason):
-            credentialsStatus.text = "rejected: \(reason)"
-        }
-        refreshStatus()
-    }
-
     @objc private func clearForm() {
         form?.clear()
         resultLabel.text = "—"
-    }
-
-    @objc private func refreshStatus() {
-        credentialsStatus.text = LiveConfig.shared.credentialsStatus()
     }
 
     // ── Keyboard shortcuts, for driving this harness ─────────────────────────────
@@ -400,25 +395,7 @@ final class CollectViewController: UIViewController {
                 + "number rather than debugging the failure."
         ))
 
-        stack.addArrangedSubview(heading("Credentials (JSON)"))
-        credentialsField.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
-        borders.track(credentialsField)
-        credentialsField.autocorrectionType = .no
-        credentialsField.autocapitalizationType = .none
-        // iOS rewrites `-` into an en dash inside a pasted JWT, which parses and then fails as a 400.
-        // Keep these three off.
-        credentialsField.smartQuotesType = .no
-        credentialsField.smartDashesType = .no
-        credentialsField.smartInsertDeleteType = .no
-        credentialsField.heightAnchor.constraint(equalToConstant: 96).isActive = true
-        stack.addArrangedSubview(credentialsField)
-        stack.addArrangedSubview(button("Apply credentials", #selector(applyCredentials)))
-        stack.addArrangedSubview(button("Refresh status", #selector(refreshStatus)))
-
-        credentialsStatus.numberOfLines = 0
-        credentialsStatus.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        credentialsStatus.textColor = .secondaryLabel
-        stack.addArrangedSubview(credentialsStatus)
+        // Credentials and identity are entered on the Config tab now, shared by every surface.
 
         // LAST, below everything. It is a tall editor for a thing most runs never touch, and
         // anywhere higher it pushes the form — the actual subject of the screen — off the
