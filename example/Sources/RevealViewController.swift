@@ -34,16 +34,12 @@ final class RevealViewController: UIViewController {
     private var keyboardAvoider: KeyboardAvoider?
 
     private let credentials = HostCredentialProvider()
-    /// Nil when no environment is configured to talk to; `unavailable` then says why.
-    private lazy var reveal: WirexReveal? = {
-        switch Self.configuredEnvironment() {
-        case .failure(let reason):
-            unavailable = reason
-            return nil
-        case .success(let environment):
-            return makeReveal(environment)
-        }
-    }()
+    /// Nil until an environment resolves. (Re)built lazily in `configureAndCreateSession` — the chain
+    /// id and environment are read at CONFIGURE time, so a chain id typed on the Config tab after the
+    /// screen appeared must reconfigure, not just rebuild the session.
+    private var reveal: WirexReveal?
+    /// The environment + chain id the SDK was last configured with, so a change can reconfigure.
+    private var lastConfigKey = ""
 
     private var unavailable: WirexEnvironmentUnavailable?
 
@@ -59,13 +55,6 @@ final class RevealViewController: UIViewController {
         // nothing reaches here that the level did not permit. Values and tokens are never among the fields.
         logging: osLogLogging(level: .info)
         )
-    }
-
-    /// The SDK, once `viewDidLoad` has established there is one. Every call site below runs only
-    /// after that guard, so the force-unwrap is a statement about control flow rather than a risk.
-    private func requireReveal() -> WirexReveal {
-        guard let reveal else { preconditionFailure("reached without an environment") }
-        return reveal
     }
 
     private var session: WirexRevealSession?
@@ -167,24 +156,13 @@ final class RevealViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
 
-        // Resolved BEFORE anything is built. A checkout has no endpoints — that is the shape of this
-        // repository, not a fault — and the screen has to say so rather than die or draw rows that
-        // cannot load.
-        guard reveal != nil else {
-            let message = unavailableView(unavailable ?? .notBuilt(name: LiveConfig.shared.environment, variables: []))
-            message.translatesAutoresizingMaskIntoConstraints = false
-            view.addSubview(message)
-            NSLayoutConstraint.activate([
-                message.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-                message.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-                message.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            ])
-            return
-        }
-
+        // The layout is built UNCONDITIONALLY; the SDK is configured lazily in
+        // `configureAndCreateSession`, which re-runs on every Config change. An example that returned a
+        // dead "unavailable" view when no chain id was set could never recover once the chain id was
+        // typed on the Config tab, because the chain id is read at configure time.
         buildLayout()
         installKeyboardHandling()
-        createSession()
+        configureAndCreateSession()
 
         if LaunchOption.autoLoad {
             Task {
@@ -239,13 +217,47 @@ final class RevealViewController: UIViewController {
     /// (card id / cardholder) changed — the bearer and action token are read lazily, so they need no
     /// rebuild. A no-op until an environment resolved, since there is no session to rebuild.
     @objc private func credentialsDidChange() {
-        guard reveal != nil else { return }
-        recreateSessionIfIdentityChanged()
+        configureAndCreateSession()
+    }
+
+    /// (Re)configures the SDK for the current environment + chain id, then opens a session. The chain
+    /// id / environment are read at configure time, so a value typed on the Config tab must reconfigure
+    /// here — recovering from the unavailable state — not merely rebuild the session.
+    private func configureAndCreateSession() {
+        switch Self.configuredEnvironment() {
+        case .failure(let reason):
+            reveal = nil
+            lastConfigKey = ""
+            session = nil
+            rows.values.forEach { $0.removeFromSuperview() }
+            rows.removeAll()
+            rowStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+            let detail: String
+            switch reason {
+            case .missingChainId: detail = "set the Chain ID on the Config tab, then it loads"
+            case .notBuilt(let name, _): detail = "the SDK has no configuration for '\(name)'"
+            case .unknownName(let name, _): detail = "unknown environment '\(name)'"
+            case .malformedEndpoints(let name): detail = "could not resolve endpoints for '\(name)'"
+            }
+            statusLabel.text = "Reveal unavailable — \(detail)"
+        case .success(let environment):
+            let key = LiveConfig.shared.environment + "|" + LiveConfig.shared.credential("chainId")
+            let reconfigured = reveal == nil || key != lastConfigKey
+            if reconfigured {
+                reveal = makeReveal(environment)
+                lastConfigKey = key
+            }
+            let identity = "\(cardId)|" + LiveConfig.shared.credential("cardholderName")
+            if reconfigured || session == nil || identity != sessionIdentity {
+                createSession()
+            }
+        }
     }
 
     // MARK: - Session
 
     private func createSession() {
+        guard let sdk = reveal else { return }
         rows.values.forEach { $0.removeFromSuperview() }
         rows.removeAll()
         rowStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
@@ -255,7 +267,7 @@ final class RevealViewController: UIViewController {
         // has to say so rather than showing four rows that will fail one request later.
         let created: WirexRevealSession
         do {
-            created = try requireReveal().session(
+            created = try sdk.session(
                 cardId: cardId,
                 fields: fields,
                 // Host-supplied, never fetched: a real host already has it from the card list it rendered.
@@ -321,20 +333,6 @@ final class RevealViewController: UIViewController {
         isMasked = masked
         rows.values.forEach { masked ? $0.mask() : $0.reveal() }
         if let snapshot = session?.snapshot { renderStatus(snapshot) }
-    }
-
-    /// Rebuilds the session when a credential the session CAPTURED has changed.
-    ///
-    /// Deliberately not unconditional: a rebuild drops loaded values and re-masks, so doing it for
-    /// a pasted `actionToken` — read lazily and therefore already live — would throw away work for
-    /// nothing.
-    private func recreateSessionIfIdentityChanged() {
-        let identity = "\(LiveConfig.shared.credential("cardId"))|"
-            + LiveConfig.shared.credential("cardholderName")
-        guard identity != sessionIdentity else { return }
-        sessionIdentity = identity
-        createSession()
-        flash("session rebuilt — cardId or cardholderName changed")
     }
 
     /// Restyles from whatever `LiveConfig` currently holds.
