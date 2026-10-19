@@ -75,7 +75,7 @@ final class ConfigViewController: UIViewController {
         let statusCard = card([statusLabel, pillButton("Refresh status", color: Theme.surfaceAlt, textColor: Theme.teal, action: #selector(refreshStatus))])
         content.addArrangedSubview(statusCard)
 
-        let reset = pillButton("Reset all", color: UIColor(white: 1, alpha: 0).withAlphaComponent(0), textColor: Theme.pink, action: #selector(resetAll))
+        let reset = pillButton("Reset all", color: .clear, textColor: Theme.pink, action: #selector(resetAll))
         reset.backgroundColor = Theme.pink.withAlphaComponent(0.13)
         reset.layer.borderWidth = 1
         reset.layer.borderColor = Theme.pink.cgColor
