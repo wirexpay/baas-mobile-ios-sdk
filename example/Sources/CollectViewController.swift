@@ -51,6 +51,10 @@ final class CollectViewController: UIViewController {
     private let resultLabel = UILabel()
     private var tokenizeButton = UIButton(type: .system)
     private let profiles = UISegmentedControl(items: ["topup", "oct-destination"])
+    /// The environment + chain id the form was built for. Only those are read when it is built; the
+    /// bearer is read per call, so a pasted token must not clear a half-typed card.
+    private var lastConfigKey = ""
+    private var currentConfigKey: String { LiveConfig.shared.environment + "|" + LiveConfig.shared.credential("chainId") }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -64,9 +68,9 @@ final class CollectViewController: UIViewController {
             name: LiveConfig.appearanceDidChange,
             object: nil
         )
-        // A value typed on the Config tab: rebuild the form so the fresh environment / chainId /
-        // credentials take effect. A rebuild clears what is typed, which is honest here — the
-        // connection the form talks over has changed.
+        // The environment or chain id changed on the Config tab: rebuild the form so the fresh
+        // connection takes effect. A rebuild clears what is typed, which is honest here — the
+        // connection the form talks over has changed. A pasted bearer does NOT rebuild.
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(credentialsDidChange),
@@ -78,6 +82,7 @@ final class CollectViewController: UIViewController {
     }
 
     @objc private func credentialsDidChange() {
+        guard currentConfigKey != lastConfigKey else { return }
         rebuildForm()
     }
 
@@ -96,6 +101,7 @@ final class CollectViewController: UIViewController {
     // ── The SDK ─────────────────────────────────────────────────────────────────
 
     private func rebuildForm() {
+        lastConfigKey = currentConfigKey
         // A fresh instance per rebuild, because the environment name and the credentials can change
         // between rebuilds. The same reason the reveal screen rebuilds its session on Apply.
         // `resolve` rather than `named`, because the two failures behind a nil are fixed in

@@ -18,10 +18,18 @@ final class ThreeDSViewController: UIViewController {
 
     private var session: WirexThreeDSSession?
 
-    private lazy var threeDS = WirexThreeDS(
-        testMode: true,
-        logging: WirexLogging(level: .info, sink: ConsoleLogSink())
-    )
+    /// Rebuilt whenever the Config tab's environment changes: `testMode` is read at construction.
+    private var threeDS: WirexThreeDS?
+    private var threeDSTestMode: Bool?
+
+    private func currentThreeDS() -> WirexThreeDS {
+        let testMode = LiveConfig.shared.isTestMode
+        if let threeDS, threeDSTestMode == testMode { return threeDS }
+        let fresh = WirexThreeDS(testMode: testMode, logging: WirexLogging(level: .info, sink: ConsoleLogSink()))
+        threeDS = fresh
+        threeDSTestMode = testMode
+        return fresh
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -115,7 +123,7 @@ final class ThreeDSViewController: UIViewController {
         urlField.resignFirstResponder()
         session?.destroy()
 
-        let session = threeDS.session(orchestratorUrl: urlField.text ?? "")
+        let session = currentThreeDS().session(orchestratorUrl: urlField.text ?? "")
         self.session = session
         session.onChange = { [weak self] snapshot in self?.render(snapshot) }
         challengeView.bind(session)

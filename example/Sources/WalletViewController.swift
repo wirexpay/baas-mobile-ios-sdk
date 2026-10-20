@@ -16,8 +16,10 @@ import WirexMobileSDK
 final class WalletViewController: UIViewController {
     // Resolved once from the example's environment name. Nil (with a reason) when the SDK has no
     // configuration for that name — the screen then shows the reason instead of a broken checkout.
-    private let config: WirexWalletConfig?
-    private let unavailableReason: String?
+    private var config: WirexWalletConfig?
+    private var unavailableReason: String?
+    /// The environment NAME the config was resolved for, so a Config-tab change can re-resolve.
+    private var configuredEnvironment = ""
     private let cache = MemoryAvailabilityCache()
 
     private let scrollView = UIScrollView()
@@ -69,21 +71,41 @@ final class WalletViewController: UIViewController {
         """
 
     init() {
+        super.init(nibName: nil, bundle: nil)
+        resolveConfig()
+    }
+
+    /// Resolves the wallet config from the Config tab's environment NAME. Re-run when it changes.
+    private func resolveConfig() {
+        let name = LiveConfig.shared.environment
+        configuredEnvironment = name
         do {
-            let environment = try WirexWalletEnvironment.resolve(LiveConfig.shared.environment)
-            self.config = WirexWalletConfig(
+            let environment = try WirexWalletEnvironment.resolve(name)
+            config = WirexWalletConfig(
                 environment: environment,
                 clientId: nil,
                 logging: WirexWalletLogging(level: .info, sink: ConsoleLogSink()),
                 cache: cache
             )
-            self.unavailableReason = nil
+            unavailableReason = nil
         } catch {
-            self.config = nil
-            self.unavailableReason =
-                "Wallet environment '\(LiveConfig.shared.environment)' is not available in this build: \(error)"
+            config = nil
+            unavailableReason = "Wallet environment '\(name)' is not available in this build: \(error)"
         }
-        super.init(nibName: nil, bundle: nil)
+    }
+
+    /// The environment chip on the Config tab changed: what was built for the old one is torn down.
+    @objc private func credentialsDidChange() {
+        guard LiveConfig.shared.environment != configuredEnvironment else { return }
+        checker?.stop()
+        checker = nil
+        checkout?.destroy()
+        checkout?.removeFromSuperview()
+        checkout = nil
+        mountedProviderConfig = nil
+        resolveConfig()
+        log.append("environment → \(configuredEnvironment): checkout unmounted, availability re-probed")
+        startAvailabilityProbe()
     }
 
     @available(*, unavailable)
@@ -99,6 +121,9 @@ final class WalletViewController: UIViewController {
         view.backgroundColor = .systemBackground
         title = "Wallet"
         buildLayout()
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(credentialsDidChange), name: LiveConfig.credentialsDidChange, object: nil
+        )
 
         scrollView.keyboardDismissMode = .onDrag
         let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
@@ -384,8 +409,9 @@ final class WalletViewController: UIViewController {
         let chainId = cfg.credential("chainId")
         let wallet = cfg.credential("wallet")
         let email = cfg.credential("email")
-        guard !base.isEmpty, !bearer.isEmpty else {
-            log.append("Fetch estimate: set BaaS API URL + bearer on the Config tab")
+        // https only: the bearer goes to whatever is typed here. The chain id is required by the API.
+        guard base.hasPrefix("https://"), !bearer.isEmpty, !chainId.isEmpty else {
+            log.append("Fetch estimate: set an https BaaS API URL, a bearer and the chain id on the Config tab")
             return
         }
         var headers = ["Authorization": "Bearer \(bearer)", "X-Chain-Id": chainId, "Content-Type": "application/json"]
@@ -412,7 +438,10 @@ final class WalletViewController: UIViewController {
     }
 
     private func resolveSettlementToken(base: String, headers: [String: String], currency: String) async throws -> (String, Int) {
-        var req = URLRequest(url: URL(string: "\(base)/api/v1/config/tokens")!)
+        guard let url = URL(string: "\(base)/api/v1/config/tokens") else {
+            throw NSError(domain: "estimate", code: 0, userInfo: [NSLocalizedDescriptionKey: "BaaS API URL is not a valid URL"])
+        }
+        var req = URLRequest(url: url)
         headers.forEach { req.setValue($0.value, forHTTPHeaderField: $0.key) }
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
@@ -433,7 +462,10 @@ final class WalletViewController: UIViewController {
     }
 
     private func postEstimate(base: String, headers: [String: String], amount: String, decimals: Int, tokenAddress: String) async throws -> String {
-        var req = URLRequest(url: URL(string: "\(base)/api/v1/cards/topup/estimate")!)
+        guard let url = URL(string: "\(base)/api/v1/cards/topup/estimate") else {
+            throw NSError(domain: "estimate", code: 0, userInfo: [NSLocalizedDescriptionKey: "BaaS API URL is not a valid URL"])
+        }
+        var req = URLRequest(url: url)
         req.httpMethod = "POST"
         headers.forEach { req.setValue($0.value, forHTTPHeaderField: $0.key) }
         req.httpBody = try JSONSerialization.data(withJSONObject: [
