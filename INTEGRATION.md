@@ -1,8 +1,8 @@
 # Wirex Mobile SDK for iOS — Integration Guide
 
-One Swift package, four sealed surfaces: card **Reveal**, card **Collect**, **3-D Secure** and **Wallet** top-up with Apple Pay. This guide covers what each surface needs, where the credentials come from, how to style the views, and how to run the example app. Every snippet below is type-checked against `WirexMobileSDK` 0.3.7.
+One Swift package, four sealed surfaces: card **Reveal**, card **Collect**, **3-D Secure** and **Wallet** top-up with Apple Pay. This guide covers what each surface needs, where the credentials come from, how to style the views, and how to run the example app. Every snippet below is type-checked against `WirexMobileSDK` 0.3.12.
 
-<!-- badges: Native iOS · Swift · UIKit | WirexMobileSDK 0.3.7 · Swift Package / CocoaPods | Reveal · Collect · 3-D Secure · Wallet -->
+<!-- badges: Native iOS · Swift · UIKit | WirexMobileSDK 0.3.12 · Swift Package / CocoaPods | Reveal · Collect · 3-D Secure · Wallet -->
 
 ## 1. What the SDK does
 
@@ -24,19 +24,19 @@ Your app supplies two things:
 
 ## 2. Requirements and install
 
-- **iOS 15 or later.** The framework is built for iOS 13+, but Wirex supports and tests integrations on iOS 15 and later.
+- **iOS 15 or later.** The framework's deployment target is iOS 15.
 - **Xcode 26.5 or later.** The binary ships a `.swiftinterface`; it can be read by the compiler that built it or a newer one.
 - Swift Package Manager or CocoaPods. Both install the same `WirexMobileSDK.xcframework`, verified by checksum.
 
 ```swift
 // Package.swift (or Xcode → File → Add Package Dependencies…)
-.package(url: "https://github.com/wirexpay/baas-mobile-ios-sdk.git", from: "0.3.7")
+.package(url: "https://github.com/wirexpay/baas-mobile-ios-sdk.git", from: "0.3.12")
 // then add the product "WirexMobileSDK" to your app target
 ```
 
 ```ruby
 # Podfile
-pod 'WirexMobileSDK', '~> 0.3.7'
+pod 'WirexMobileSDK', '~> 0.3.12'
 ```
 
 Wirex assigns these values per integration. Everything else is your user's data.

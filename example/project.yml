@@ -21,7 +21,7 @@ packages:
   # 3-D Secure and wallet top-up — from one binary package.
   WirexMobileSDK:
     url: https://github.com/wirexpay/baas-mobile-ios-sdk.git
-    from: "0.3.7"
+    from: "0.3.12"
 
 targets:
   WirexMobileSdkExample:

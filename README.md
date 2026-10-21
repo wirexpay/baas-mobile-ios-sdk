@@ -31,7 +31,7 @@ https://github.com/wirexpay/baas-mobile-ios-sdk
 Or in `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/wirexpay/baas-mobile-ios-sdk", from: "0.3.7")
+.package(url: "https://github.com/wirexpay/baas-mobile-ios-sdk", from: "0.3.12")
 ```
 
 Then add the `WirexMobileSDK` product to your target.
@@ -39,7 +39,7 @@ Then add the `WirexMobileSDK` product to your target.
 ### CocoaPods
 
 ```ruby
-pod 'WirexMobileSDK', '~> 0.3.7'
+pod 'WirexMobileSDK', '~> 0.3.12'
 ```
 
 Both install the same `WirexMobileSDK.xcframework`, attached to the GitHub release of each version.
