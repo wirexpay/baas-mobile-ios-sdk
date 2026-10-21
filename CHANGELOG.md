@@ -1,11 +1,12 @@
 # Changelog
 
-## 0.3.12
+## 0.3.13
 
 Reveal
 - A row masked when the app leaves the foreground keeps your reveal request and draws again on return, as long as the session still holds the value. Past the session's 120 s lifetime the row stays masked until you load again.
 - A hidden segmented field (PIN) shows the masked placeholder's glyph in every cell instead of empty boxes.
 - Deployment floor is iOS 15.
+- Reveal: new string `maskedSegmentGlyph`, drawn in every PIN cell while masked (default `*`; pass `•` for dots).
 
 ## 0.3.7
 
