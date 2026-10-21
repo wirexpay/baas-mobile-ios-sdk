@@ -1,8 +1,8 @@
 # Wirex Mobile SDK for iOS — Integration Guide
 
-One Swift package, four sealed surfaces: card **Reveal**, card **Collect**, **3-D Secure** and **Wallet** top-up with Apple Pay. This guide covers what each surface needs, where the credentials come from, how to style the views, and how to run the example app. Every snippet below is type-checked against `WirexMobileSDK` 0.3.7.
+One Swift package, four sealed surfaces: card **Reveal**, card **Collect**, **3-D Secure** and **Wallet** top-up with Apple Pay. This guide covers what each surface needs, where the credentials come from, how to style the views, and how to run the example app. Every snippet below is type-checked against `WirexMobileSDK` 0.3.13.
 
-<!-- badges: Native iOS · Swift · UIKit | WirexMobileSDK 0.3.7 · Swift Package / CocoaPods | Reveal · Collect · 3-D Secure · Wallet -->
+<!-- badges: Native iOS · Swift · UIKit | WirexMobileSDK 0.3.13 · Swift Package / CocoaPods | Reveal · Collect · 3-D Secure · Wallet -->
 
 ## 1. What the SDK does
 
@@ -24,19 +24,19 @@ Your app supplies two things:
 
 ## 2. Requirements and install
 
-- **iOS 15 or later.** The framework is built for iOS 13+, but Wirex supports and tests integrations on iOS 15 and later.
+- **iOS 15 or later.** The framework's deployment target is iOS 15.
 - **Xcode 26.5 or later.** The binary ships a `.swiftinterface`; it can be read by the compiler that built it or a newer one.
 - Swift Package Manager or CocoaPods. Both install the same `WirexMobileSDK.xcframework`, verified by checksum.
 
 ```swift
 // Package.swift (or Xcode → File → Add Package Dependencies…)
-.package(url: "https://github.com/wirexpay/baas-mobile-ios-sdk.git", from: "0.3.7")
+.package(url: "https://github.com/wirexpay/baas-mobile-ios-sdk.git", from: "0.3.13")
 // then add the product "WirexMobileSDK" to your app target
 ```
 
 ```ruby
 # Podfile
-pod 'WirexMobileSDK', '~> 0.3.7'
+pod 'WirexMobileSDK', '~> 0.3.13'
 ```
 
 Wirex assigns these values per integration. Everything else is your user's data.
@@ -312,7 +312,7 @@ func styled(reveal: WirexReveal, session: WirexRevealSession) -> WirexRevealFiel
     let appearance = WirexAppearance(mode: .dark, colorTextOverride: .white, colorFocusOverride: .systemBlue,
                                      fontFamily: "Inter", fontSizeBase: 17, borderRadius: 12)
     let strings = WirexRevealStrings(fieldLabels: [.pan: "Card number", .cvv: "CVV"],
-                                     maskedPlaceholder: "••••", copy: "Copy", copied: "Copied")
+                                     maskedPlaceholder: "••••", maskedSegmentGlyph: "*", copy: "Copy", copied: "Copied")
     let row = WirexRevealFieldView(session: session, field: .pan, appearance: appearance, strings: strings)
     return row
 }
@@ -325,7 +325,7 @@ func walletStyle() -> (WirexWalletAppearance, WirexWalletBranding, WirexWalletBu
 ```
 
 - `WirexAppearance` is a memberwise struct with every parameter defaulted: `mode` (`.light` / `.dark`), colour overrides (`colorTextOverride`, `colorLabelOverride`, `colorPlaceholderOverride`, `colorErrorOverride`, `colorFocusOverride`, `colorBackgroundOverride`, `colorBorderOverride`, `surfaceColorOverride`), typography (`fontFamily`, `fontSizeBase`, `fontSizeLabel`, `lineHeightBase`, `lineHeightLabel`, `fontWeightBase`, `fontWeightLabel`), geometry (`borderRadius`, `borderWidth`, `spacingUnit`, `paddingHorizontal`, `paddingVertical`, `spacingLabel`, `spacingError`, `iconSize`, `controlMinHeight`). The same object styles Reveal, Collect and 3-D Secure; `setAppearance(_:)` / `apply(appearance:)` restyle a live view.
-- Strings: `WirexRevealStrings`, `WirexCollectStrings` (labels, placeholders, an `error` closure per field and a `brandName` closure) and `WirexThreeDSStrings(title:close:loading:)`. Icons: `WirexRevealIcons(copy:copied:)`, `WirexCollectIcons(visa:mastercard:)`, `WirexThreeDSIcons(close:)`.
+- Strings: `WirexRevealStrings` (field labels, `maskedPlaceholder` for plain fields, `maskedSegmentGlyph` drawn in every PIN cell while masked, default `*`, copy texts), `WirexCollectStrings` (labels, placeholders, an `error` closure per field and a `brandName` closure) and `WirexThreeDSStrings(title:close:loading:)`. Icons: `WirexRevealIcons(copy:copied:)`, `WirexCollectIcons(visa:mastercard:)`, `WirexThreeDSIcons(close:)`.
 - Wallet: `WirexWalletAppearance(theme:variables:)` passes CSS variables to the frame; `WirexWalletBranding(logo:processingDisclosurePartnerName:privacyUrl:)`; `WirexWalletButtons` sets the Apple Pay button `style` (`black`, `white`, `whiteOutline`) and `type` (`plain`, `topUp`, `buy`).
 - **Sizing.** `WirexRevealFieldView.naturalHeight`, `WirexCollectForm.naturalHeight` and the wallet's `.naturalHeight` event report the content height. Apply it instead of hardcoding a row height.
 
