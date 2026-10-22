@@ -41,5 +41,18 @@
     <array>
         <string>UIInterfaceOrientationPortrait</string>
     </array>
+    <!-- The `wirexqa://seed?d=<base64url(JSON)>` deep link that prefills the Config (see
+         AppDelegate.applySeedLink), so a partner or QA can arm a device without typing. -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.wirexapp.baas.example.seed</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>wirexqa</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>

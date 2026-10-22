@@ -36,12 +36,25 @@ final class ConfigViewController: UIViewController {
         view.backgroundColor = Theme.bg
         buildLayout()
         refreshStatus()
+        // A seed deep link that arrives while this tab is on screen changes the store without a
+        // viewWillAppear; mirror the new values into the fields, skipping the one being edited.
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(syncFields), name: LiveConfig.credentialsDidChange, object: nil,
+        )
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        // Reflect whatever another path (a launch argument, a future import) put in the store.
-        fields.forEach { $0.text = LiveConfig.shared.credential($0.configKey) }
+        // Reflect whatever another path (a launch argument, a seed deep link) put in the store.
+        syncFields()
+    }
+
+    @objc private func syncFields() {
+        fields.forEach { field in
+            guard !field.isFirstResponder else { return }
+            let value = LiveConfig.shared.credential(field.configKey)
+            if field.text != value { field.text = value }
+        }
         syncEnvironmentChips()
         refreshStatus()
     }
