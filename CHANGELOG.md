@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.14
+
+- Version aligned with the other mobile SDKs (0.3.14). No iOS code change: iOS already honours `dangerouslyDisableScreenProtection` per field, so the Android reveal fix in this release has no iOS counterpart.
+
 ## 0.3.13
 
 Reveal
