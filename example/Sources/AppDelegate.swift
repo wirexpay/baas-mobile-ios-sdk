@@ -40,6 +40,10 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     ) {
         guard let windowScene = scene as? UIWindowScene else { return }
 
+        // A `wirexqa://seed?d=<base64url(JSON)>` deep link prefills the Config, so a partner or QA can
+        // arm a device without typing. Applied before the tabs are built, so the first read sees it.
+        connectionOptions.urlContexts.forEach { Self.applySeedLink($0.url) }
+
         // Six tabs, the same set and order every platform's example carries. Config is first: a
         // per-field editor over `LiveConfig`, the single store the surfaces read. Reveal DISPLAYS a
         // card the user owns; collect CAPTURES one they type; they share credentials and appearance
@@ -80,5 +84,35 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window.rootViewController = tabs
         window.makeKeyAndVisible()
         self.window = window
+    }
+
+    /// A deep link that arrives while the app is already running (the Config tab re-reads the store
+    /// when it next appears; the reveal / collect surfaces read it live).
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        URLContexts.forEach { Self.applySeedLink($0.url) }
+    }
+
+    /// Reads a `wirexqa://seed?d=<base64url(JSON)>` deep link into `LiveConfig` — any parameter, the
+    /// bearer and action token included. A real integration mints those from its own auth and the
+    /// user's wallet; this only saves typing on a test device. The native / RN / Flutter examples name
+    /// identity `userWallet` / `userEmail`; those map to this example's `wallet` / `email`.
+    static func applySeedLink(_ url: URL) {
+        guard url.scheme == "wirexqa", url.host == "seed",
+              let d = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                  .queryItems?.first(where: { $0.name == "d" })?.value,
+              let data = base64urlDecode(d),
+              let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return }
+        let aliases = ["userWallet": "wallet", "userEmail": "email"]
+        for (rawKey, value) in obj {
+            let string = (value as? String) ?? "\(value)"
+            if !string.isEmpty { LiveConfig.shared.setCredential(aliases[rawKey] ?? rawKey, string) }
+        }
+    }
+
+    private static func base64urlDecode(_ input: String) -> Data? {
+        var s = input.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        while s.count % 4 != 0 { s += "=" }
+        return Data(base64Encoded: s)
     }
 }
