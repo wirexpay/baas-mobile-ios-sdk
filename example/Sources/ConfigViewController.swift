@@ -73,6 +73,9 @@ final class ConfigViewController: UIViewController {
             "Type a partner's parameters here; every screen reads them live. Secrets stay in memory only."
         ))
 
+        content.addArrangedSubview(sectionLabel("Seed link"))
+        content.addArrangedSubview(seedLinkCard())
+
         content.addArrangedSubview(sectionLabel("Environment"))
         content.addArrangedSubview(environmentRow())
 
@@ -123,6 +126,35 @@ final class ConfigViewController: UIViewController {
         let tap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
         tap.cancelsTouchesInView = false
         scrollView.addGestureRecognizer(tap)
+    }
+
+    /// The same `wirexqa://seed?d=…` link the app opens as a deep link, pasted instead — for a device
+    /// where opening the link is awkward (a chat that strips the scheme, a locked-down browser).
+    private let seedField = ConfigField()
+    private let seedStatus = UILabel()
+
+    private func seedLinkCard() -> UIView {
+        seedField.placeholder = "wirexqa://seed?d=…"
+        seedField.keyboardType = .URL
+        seedField.returnKeyType = .done
+        seedField.addTarget(self, action: #selector(applySeedLink), for: .editingDidEndOnExit)
+        seedStatus.text = "Paste the link the QA kit prints (the same one the app opens as a deep link); Apply fills every field below."
+        seedStatus.font = .systemFont(ofSize: 12)
+        seedStatus.textColor = Theme.textFaint
+        seedStatus.numberOfLines = 0
+        let apply = pillButton("Apply", color: Theme.accent, textColor: Theme.onAccent, action: #selector(applySeedLink))
+        let applyRow = UIStackView(arrangedSubviews: [apply, UIView()])
+        applyRow.axis = .horizontal
+        return card([seedField, applyRow, seedStatus])
+    }
+
+    @objc private func applySeedLink() {
+        let applied = LiveConfig.shared.applySeedLink(seedField.text ?? "")
+        seedStatus.text = applied.map { "Applied \($0) value\($0 == 1 ? "" : "s")" } ?? "Not a wirexqa://seed link"
+        seedStatus.textColor = applied == nil ? Theme.pink : Theme.green
+        if applied != nil { seedField.text = "" }
+        view.endEditing(true)
+        syncFields()
     }
 
     private func environmentRow() -> UIView {
