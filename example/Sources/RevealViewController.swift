@@ -53,7 +53,10 @@ final class RevealViewController: UIViewController {
         // unified log — the collect screen passes its own sink to show the other half. Everything a
         // sink receives has already been through the redactor; the level gate runs before the sink, so
         // nothing reaches here that the level did not permit. Values and tokens are never among the fields.
-        logging: osLogLogging(level: .info)
+        logging: osLogLogging(level: .info),
+        // DEV/TEST ONLY, from the Config tab's "Screen capture" switch: off by default, so the value is
+        // drawn in the secure layer (blank on the Simulator, black in a capture). Never ship it on.
+        dangerouslyDisableScreenProtection: LiveConfig.shared.isScreenProtectionDisabled
         )
     }
 
@@ -241,7 +244,7 @@ final class RevealViewController: UIViewController {
             }
             statusLabel.text = "Reveal unavailable — \(detail)"
         case .success(let environment):
-            let key = LiveConfig.shared.environment + "|" + LiveConfig.shared.credential("chainId")
+            let key = LiveConfig.shared.environment + "|" + LiveConfig.shared.credential("chainId") + "|\(LiveConfig.shared.isScreenProtectionDisabled)"
             let reconfigured = reveal == nil || key != lastConfigKey
             if reconfigured {
                 reveal = makeReveal(environment)

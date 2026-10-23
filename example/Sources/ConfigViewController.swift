@@ -56,6 +56,7 @@ final class ConfigViewController: UIViewController {
             if field.text != value { field.text = value }
         }
         syncEnvironmentChips()
+        captureSwitch.isOn = !LiveConfig.shared.isScreenProtectionDisabled
         refreshStatus()
     }
 
@@ -83,6 +84,9 @@ final class ConfigViewController: UIViewController {
 
         content.addArrangedSubview(sectionLabel("Secrets · memory only"))
         content.addArrangedSubview(group(Self.secrets))
+
+        content.addArrangedSubview(sectionLabel("Screen capture"))
+        content.addArrangedSubview(screenCaptureCard())
 
         content.addArrangedSubview(sectionLabel("Credentials status"))
         statusLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
@@ -172,6 +176,39 @@ final class ConfigViewController: UIViewController {
         row.addArrangedSubview(UIView())
         syncEnvironmentChips()
         return row
+    }
+
+    private let captureSwitch = UISwitch()
+
+    /// DEV/TEST ONLY. Off = `dangerouslyDisableScreenProtection: true` on Reveal and Collect, so QA can
+    /// capture the surfaces (the Simulator renders the secure layer blank otherwise). A seed link can set
+    /// the same key (`disableScreenProtection`). Never ship a build with it off to cardholders.
+    private func screenCaptureCard() -> UIView {
+        let label = UILabel()
+        label.text = "Screen-capture protection"
+        label.font = .systemFont(ofSize: 14, weight: .bold)
+        label.textColor = Theme.text
+        let hint = UILabel()
+        hint.text = "On — card data is HIDDEN from screenshots / recording on Reveal & Collect (the secure default).\nOff — data is VISIBLE so QA can capture it for a test."
+        hint.font = .systemFont(ofSize: 12)
+        hint.textColor = Theme.textFaint
+        hint.numberOfLines = 0
+        let texts = UIStackView(arrangedSubviews: [label, hint])
+        texts.axis = .vertical
+        texts.spacing = 2
+        captureSwitch.onTintColor = Theme.accent
+        captureSwitch.isOn = !LiveConfig.shared.isScreenProtectionDisabled
+        captureSwitch.addTarget(self, action: #selector(captureSwitchChanged), for: .valueChanged)
+        captureSwitch.setContentHuggingPriority(.required, for: .horizontal)
+        let row = UIStackView(arrangedSubviews: [texts, captureSwitch])
+        row.axis = .horizontal
+        row.alignment = .center
+        row.spacing = 12
+        return card([row])
+    }
+
+    @objc private func captureSwitchChanged() {
+        LiveConfig.shared.setCredential("disableScreenProtection", captureSwitch.isOn ? "" : "true")
     }
 
     private func group(_ specs: [FieldSpec]) -> UIView {
