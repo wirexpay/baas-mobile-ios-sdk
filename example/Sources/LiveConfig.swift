@@ -111,6 +111,46 @@ final class LiveConfig {
     /// `test` everywhere but the production name — mirrors `exampleConfig.ts`.
     var isTestMode: Bool { environment != "production" }
 
+    // MARK: - Seed link
+
+    /// Applies a `wirexqa://seed?d=<base64url(JSON)>` link — the deep link the example registers — from
+    /// the launch URL or from text pasted into the Config tab. Returns how many values were set, or nil
+    /// when it is not a seed link (other scheme or host, no `d`, undecodable). Any key is applied, the
+    /// bearer and action token included; the RN example names identity `userWallet` / `userEmail`,
+    /// which map to this example's `wallet` / `email`. A real integration mints these from its own auth
+    /// and the user's wallet; this only saves typing on a test device.
+    @discardableResult
+    func applySeedLink(_ url: URL) -> Int? {
+        guard url.scheme == "wirexqa", url.host == "seed",
+              let d = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                  .queryItems?.first(where: { $0.name == "d" })?.value,
+              let data = Self.base64urlDecode(d),
+              let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return nil }
+        let aliases = ["userWallet": "wallet", "userEmail": "email"]
+        var applied = 0
+        for (rawKey, value) in obj {
+            let string = (value as? String) ?? "\(value)"
+            guard !string.isEmpty else { continue }
+            setCredential(aliases[rawKey] ?? rawKey, string, notify: false)
+            applied += 1
+        }
+        announceCredentialsChange()
+        return applied
+    }
+
+    @discardableResult
+    func applySeedLink(_ text: String) -> Int? {
+        guard let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)) else { return nil }
+        return applySeedLink(url)
+    }
+
+    private static func base64urlDecode(_ input: String) -> Data? {
+        var s = input.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        while s.count % 4 != 0 { s += "=" }
+        return Data(base64Encoded: s)
+    }
+
     /// Clears every credential / identity value back to empty (environment falls back to `test`).
     func resetCredentials() {
         lock.wirexWithLock { credentials.removeAll() }
