@@ -48,7 +48,12 @@ final class LiveConfig {
     func applyCredentials(json: String) -> ConfigOutcome {
         guard let parsed = Self.parse(json) else { return .rejected("not valid JSON") }
 
-        let known = ["environment", "bearer", "email", "wallet", "cardId", "chainId", "actionToken", "cardholderName", "baasApiUrl"]
+        let known = [
+            "environment", "bearer", "email", "wallet", "cardId", "chainId", "actionToken", "cardholderName", "baasApiUrl",
+            // Screen-capture protection. Only "true" disables it; unset / anything else keeps it ON — the
+            // secure default. Set it from the Config tab or a seed link to let QA capture the surfaces.
+            "disableScreenProtection",
+        ]
         var applied: [String] = []
         var cleared: [String] = []
         var unknown: [String] = []
@@ -110,6 +115,11 @@ final class LiveConfig {
 
     /// `test` everywhere but the production name — mirrors `exampleConfig.ts`.
     var isTestMode: Bool { environment != "production" }
+
+    /// Whether to pass `dangerouslyDisableScreenProtection: true` to the SDK. Default false (protection
+    /// ON); `disableScreenProtection=true` lets QA capture the surfaces (the Simulator renders the secure
+    /// layer blank). Never ship it on.
+    var isScreenProtectionDisabled: Bool { credential("disableScreenProtection") == "true" }
 
     /// Clears every credential / identity value back to empty (environment falls back to `test`).
     func resetCredentials() {

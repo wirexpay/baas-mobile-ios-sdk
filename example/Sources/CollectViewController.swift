@@ -54,7 +54,9 @@ final class CollectViewController: UIViewController {
     /// The environment + chain id the form was built for. Only those are read when it is built; the
     /// bearer is read per call, so a pasted token must not clear a half-typed card.
     private var lastConfigKey = ""
-    private var currentConfigKey: String { LiveConfig.shared.environment + "|" + LiveConfig.shared.credential("chainId") }
+    private var currentConfigKey: String {
+        LiveConfig.shared.environment + "|" + LiveConfig.shared.credential("chainId") + "|\(LiveConfig.shared.isScreenProtectionDisabled)"
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -125,7 +127,9 @@ final class CollectViewController: UIViewController {
             credentials: credentials,
             // A HOST sink: diagnostics land in this app's own console instead of the unified log.
             // The reveal screen leaves it out and gets the platform default — both are supported.
-            logging: WirexLogging(level: .info, sink: ConsoleLogSink())
+            logging: WirexLogging(level: .info, sink: ConsoleLogSink()),
+            // DEV/TEST ONLY, from the Config tab's "Screen capture" switch — see RevealViewController.
+            dangerouslyDisableScreenProtection: LiveConfig.shared.isScreenProtectionDisabled
         )
         self.collect = collect
 
