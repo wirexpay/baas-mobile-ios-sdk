@@ -180,7 +180,7 @@ final class ConfigViewController: UIViewController {
 
     private let captureSwitch = UISwitch()
 
-    /// DEV/TEST ONLY. Off = `dangerouslyDisableScreenProtection: true` on Reveal and Collect, so QA can
+    /// DEV/TEST ONLY. Off = `dangerouslyDisableScreenProtection: true` on Reveal, Collect and 3DS, so QA can
     /// capture the surfaces (the Simulator renders the secure layer blank otherwise). A seed link can set
     /// the same key (`disableScreenProtection`). Never ship a build with it off to cardholders.
     private func screenCaptureCard() -> UIView {
@@ -189,7 +189,7 @@ final class ConfigViewController: UIViewController {
         label.font = .systemFont(ofSize: 14, weight: .bold)
         label.textColor = Theme.text
         let hint = UILabel()
-        hint.text = "On — card data is HIDDEN from screenshots / recording on Reveal & Collect (the secure default).\nOff — data is VISIBLE so QA can capture it for a test."
+        hint.text = "On — card data is HIDDEN from screenshots / recording on Reveal, Collect & 3DS (the secure default).\nOff — data is VISIBLE so QA can capture it for a test."
         hint.font = .systemFont(ofSize: 12)
         hint.textColor = Theme.textFaint
         hint.numberOfLines = 0
