@@ -41,10 +41,20 @@ final class ThreeDSViewController: UIViewController {
         NotificationCenter.default.addObserver(
             self, selector: #selector(restyle), name: LiveConfig.appearanceDidChange, object: nil
         )
+        // A seed link (deep link or the Config tab's field) may carry `threeDsUrl`: prefill the field.
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(syncFromConfig), name: LiveConfig.credentialsDidChange, object: nil
+        )
+        syncFromConfig()
         // No snapshot until a session exists.
         statusLabel.text = "no session"
         cancelButton.isEnabled = false
 
+    }
+
+    @objc private func syncFromConfig() {
+        let seeded = LiveConfig.shared.credential("threeDsUrl")
+        if !seeded.isEmpty, urlField.text != seeded, !urlField.isFirstResponder { urlField.text = seeded }
     }
 
     /// A run that was given a URL on the command line starts on its own.

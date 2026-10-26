@@ -94,8 +94,18 @@ final class WalletViewController: UIViewController {
         }
     }
 
+    /// A seed link (deep link or the Config tab's field) may carry the checkout token, estimation id and
+    /// provider: prefill those fields, so a QA device needs no typing. They stay editable.
+    private func syncSeededFields() {
+        for (field, key) in [(checkoutTokenField, "checkoutToken"), (estimationIdField, "estimationId"), (providerNameField, "walletProvider")] {
+            let seeded = LiveConfig.shared.credential(key)
+            if !seeded.isEmpty, field.text != seeded, !field.isFirstResponder { field.text = seeded }
+        }
+    }
+
     /// The environment chip on the Config tab changed: what was built for the old one is torn down.
     @objc private func credentialsDidChange() {
+        syncSeededFields()
         guard LiveConfig.shared.environment != configuredEnvironment else { return }
         checker?.stop()
         checker = nil
@@ -340,6 +350,7 @@ final class WalletViewController: UIViewController {
         configureField(expiresSecondsField, text: "900")
         configureField(checkoutTokenField, text: "")
         checkoutTokenField.placeholder = "top-up token (empty = legacy)"
+        syncSeededFields()
         checkoutTokenField.smartQuotesType = .no
         checkoutTokenField.smartDashesType = .no
         checkoutTokenField.smartInsertDeleteType = .no

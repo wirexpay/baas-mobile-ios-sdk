@@ -53,6 +53,9 @@ final class LiveConfig {
             // Screen-capture protection. Only "true" disables it; unset / anything else keeps it ON — the
             // secure default. Set it from the Config tab or a seed link to let QA capture the surfaces.
             "disableScreenProtection",
+            // Per-surface inputs a seed link may carry, so a QA device needs no typing at all: the 3DS
+            // tab's orchestrator URL and the Wallet tab's checkout token / estimation id / provider.
+            "threeDsUrl", "checkoutToken", "estimationId", "walletProvider",
         ]
         var applied: [String] = []
         var cleared: [String] = []
