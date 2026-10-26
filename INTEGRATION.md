@@ -1,8 +1,8 @@
 # Wirex Mobile SDK for iOS — Integration Guide
 
-One Swift package, four sealed surfaces: card **Reveal**, card **Collect**, **3-D Secure** and **Wallet** top-up with Apple Pay. This guide covers what each surface needs, where the credentials come from, how to style the views, and how to run the example app. Every snippet below is type-checked against `WirexMobileSDK` 0.3.14.
+One Swift package, four sealed surfaces: card **Reveal**, card **Collect**, **3-D Secure** and **Wallet** top-up with Apple Pay. This guide covers what each surface needs, where the credentials come from, how to style the views, and how to run the example app. Every snippet below is type-checked against `WirexMobileSDK` 0.3.15.
 
-<!-- badges: Native iOS · Swift · UIKit | WirexMobileSDK 0.3.14 · Swift Package / CocoaPods | Reveal · Collect · 3-D Secure · Wallet -->
+<!-- badges: Native iOS · Swift · UIKit | WirexMobileSDK 0.3.15 · Swift Package / CocoaPods | Reveal · Collect · 3-D Secure · Wallet -->
 
 ## 1. What the SDK does
 
@@ -30,13 +30,13 @@ Your app supplies two things:
 
 ```swift
 // Package.swift (or Xcode → File → Add Package Dependencies…)
-.package(url: "https://github.com/wirexpay/baas-mobile-ios-sdk.git", from: "0.3.14")
+.package(url: "https://github.com/wirexpay/baas-mobile-ios-sdk.git", from: "0.3.15")
 // then add the product "WirexMobileSDK" to your app target
 ```
 
 ```ruby
 # Podfile
-pod 'WirexMobileSDK', '~> 0.3.14'
+pod 'WirexMobileSDK', '~> 0.3.15'
 ```
 
 Wirex assigns these values per integration. Everything else is your user's data.
@@ -128,7 +128,7 @@ final class RevealViewController: UIViewController {
 
 > **Gotcha · sizing** A row draws its value at its natural height. Size the host box to `naturalHeight` (or let Auto Layout use `intrinsicContentSize`); a box shorter than the content clips the value.
 
-> **Note · simulator** The value is drawn in a secure, capture-proof layer that the iOS Simulator renders blank. That is the PCI protection working. For simulator development only, pass `dangerouslyDisableScreenProtection: true` to `create(...)`. Never ship it on.
+> **Note · simulator** The value is drawn in a secure, capture-proof layer that the iOS Simulator renders blank. That is the PCI protection working. For simulator development only, pass `dangerouslyDisableScreenProtection: true` to `create(...)`; `WirexThreeDS(dangerouslyDisableScreenProtection:)` takes the same switch for the 3-D Secure challenge, which is otherwise covered while the screen is recorded or mirrored. Never ship it on.
 
 ## 5. Collect {creds}
 
