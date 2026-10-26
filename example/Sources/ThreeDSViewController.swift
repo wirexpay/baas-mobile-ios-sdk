@@ -18,16 +18,26 @@ final class ThreeDSViewController: UIViewController {
 
     private var session: WirexThreeDSSession?
 
-    /// Rebuilt whenever the Config tab's environment changes: `testMode` is read at construction.
+    /// Rebuilt whenever the Config tab's environment or its Screen capture switch changes: both are
+    /// read at construction.
     private var threeDS: WirexThreeDS?
     private var threeDSTestMode: Bool?
+    private var threeDSProtectionDisabled: Bool?
 
     private func currentThreeDS() -> WirexThreeDS {
         let testMode = LiveConfig.shared.isTestMode
-        if let threeDS, threeDSTestMode == testMode { return threeDS }
-        let fresh = WirexThreeDS(testMode: testMode, logging: WirexLogging(level: .info, sink: ConsoleLogSink()))
+        let protectionDisabled = LiveConfig.shared.isScreenProtectionDisabled
+        if let threeDS, threeDSTestMode == testMode, threeDSProtectionDisabled == protectionDisabled { return threeDS }
+        let fresh = WirexThreeDS(
+            testMode: testMode,
+            logging: WirexLogging(level: .info, sink: ConsoleLogSink()),
+            // DEV/TEST ONLY — the Config tab's Screen capture switch, the same one Reveal and Collect
+            // read. Off = the challenge stays visible while the screen is recorded (device clouds).
+            dangerouslyDisableScreenProtection: protectionDisabled
+        )
         threeDS = fresh
         threeDSTestMode = testMode
+        threeDSProtectionDisabled = protectionDisabled
         return fresh
     }
 

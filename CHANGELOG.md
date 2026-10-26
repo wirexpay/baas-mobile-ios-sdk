@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.15
+
+- 3-D Secure: the challenge now renders inside a Flutter host. The step-up view no longer moves the box the host owns; a host that re-assigns the box's frame while nothing is showing (Flutter does, every frame) left the challenge off-screen.
+- 3-D Secure: `dangerouslyDisableScreenProtection` on `WirexThreeDS`, the same switch Reveal and Collect have. Set, the challenge is not covered while the screen is recorded or mirrored; app-switcher masking still applies. Off by default; never ship a build with it set.
+
 ## 0.3.14
 
 - Version aligned with the other mobile SDKs (0.3.14). No iOS code change: iOS already honours `dangerouslyDisableScreenProtection` per field, so the Android reveal fix in this release has no iOS counterpart.
