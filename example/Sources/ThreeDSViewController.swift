@@ -140,9 +140,12 @@ final class ThreeDSViewController: UIViewController {
     // MARK: - Driving the step-up
 
     @objc private func start() {
+        diag.tap("Start step-up")
         urlField.resignFirstResponder()
         session?.destroy()
 
+        // Scheme, host and path only — the query carries the session token.
+        diag.app("3ds: url \(DiagLog.describe(url: urlField.text ?? "")) protectionDisabled=\(LiveConfig.shared.isScreenProtectionDisabled)")
         let session = currentThreeDS().session(orchestratorUrl: urlField.text ?? "")
         self.session = session
         session.onChange = { [weak self] snapshot in self?.render(snapshot) }
@@ -151,6 +154,7 @@ final class ThreeDSViewController: UIViewController {
     }
 
     @objc private func cancel() {
+        diag.tap("Cancel")
         session?.cancel()
     }
 
@@ -172,5 +176,6 @@ final class ThreeDSViewController: UIViewController {
             }
         }
         statusLabel.text = lines.joined(separator: "\n")
+        diag.sdk("3ds: " + lines.joined(separator: " "))
     }
 }

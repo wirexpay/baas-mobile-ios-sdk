@@ -105,6 +105,10 @@ final class ConfigViewController: UIViewController {
         content.setCustomSpacing(26, after: statusCard)
         content.addArrangedSubview(resetRow)
 
+        content.setCustomSpacing(26, after: resetRow)
+        content.addArrangedSubview(sectionLabel("Diagnostic log"))
+        content.addArrangedSubview(diagnosticCard())
+
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.keyboardDismissMode = .onDrag
         scrollView.addSubview(content)
@@ -149,12 +153,75 @@ final class ConfigViewController: UIViewController {
     }
 
     @objc private func applySeedLink() {
-        let applied = LiveConfig.shared.applySeedLink(seedField.text ?? "")
-        seedStatus.text = applied.map { "Applied \($0) value\($0 == 1 ? "" : "s")" } ?? "Not a wirexqa://seed link"
-        seedStatus.textColor = applied == nil ? Theme.pink : Theme.green
-        if applied != nil { seedField.text = "" }
+        diag.tap("Apply seed link")
+        switch LiveConfig.shared.applySeedLink(seedField.text ?? "", source: "paste") {
+        case .applied(let keys):
+            seedStatus.text = "Applied \(keys.count) value\(keys.count == 1 ? "" : "s")"
+            seedStatus.textColor = Theme.green
+            seedField.text = ""
+        case .rejected(let reason):
+            // The contract line first, then why — so a link meant for another example says so.
+            seedStatus.text = "Not a wirexqa://seed link — \(reason)"
+            seedStatus.textColor = Theme.pink
+        }
         view.endEditing(true)
         syncFields()
+    }
+
+    // MARK: - Diagnostic log
+
+    private let diagView = EventLogView()
+    private let diagCount = UILabel()
+
+    /// The process-wide `DiagLog`, live, with Share / Copy / Clear. What a tester attaches to a report.
+    private func diagnosticCard() -> UIView {
+        let hint = caption(
+            "Everything the example and the SDK reported this run: taps, deep links, config changes, "
+                + "keyboard, SDK events. No secrets, no card data. Share it with a bug report."
+        )
+        hint.font = .systemFont(ofSize: 12)
+        hint.textColor = Theme.textFaint
+        diagView.font = .monospacedSystemFont(ofSize: 10, weight: .regular)
+        diagView.backgroundColor = Theme.surfaceAlt
+        diagView.textColor = Theme.textDim
+        diagView.heightAnchor.constraint(equalToConstant: 220).isActive = true
+        diagCount.font = .systemFont(ofSize: 12)
+        diagCount.textColor = Theme.textFaint
+        let buttons = UIStackView(arrangedSubviews: [
+            pillButton("Share log", color: Theme.accent, textColor: Theme.onAccent, action: #selector(shareDiag)),
+            pillButton("Copy", color: Theme.surfaceAlt, textColor: Theme.teal, action: #selector(copyDiag)),
+            pillButton("Clear", color: Theme.surfaceAlt, textColor: Theme.pink, action: #selector(clearDiag)),
+            UIView(),
+        ])
+        buttons.axis = .horizontal
+        buttons.spacing = 8
+        DiagLog.shared.observe(self) { [weak self] in self?.renderDiag() }
+        renderDiag()
+        return card([hint, diagView, diagCount, buttons])
+    }
+
+    private func renderDiag() {
+        diagView.replace(DiagLog.shared.text)
+        diagCount.text = "\(DiagLog.shared.count) lines"
+    }
+
+    @objc private func shareDiag() {
+        diag.tap("Share log")
+        let sheet = UIActivityViewController(activityItems: [DiagLog.shared.exportText], applicationActivities: nil)
+        // iPad presents this as a popover and needs an anchor.
+        sheet.popoverPresentationController?.sourceView = diagView
+        sheet.popoverPresentationController?.sourceRect = diagView.bounds
+        present(sheet, animated: true)
+    }
+
+    @objc private func copyDiag() {
+        diag.tap("Copy log")
+        UIPasteboard.general.string = DiagLog.shared.exportText
+        diagCount.text = "\(DiagLog.shared.count) lines — copied"
+    }
+
+    @objc private func clearDiag() {
+        DiagLog.shared.clear()
     }
 
     private func environmentRow() -> UIView {
@@ -208,6 +275,7 @@ final class ConfigViewController: UIViewController {
     }
 
     @objc private func captureSwitchChanged() {
+        diag.config("screen-capture protection \(captureSwitch.isOn ? "on" : "off")")
         LiveConfig.shared.setCredential("disableScreenProtection", captureSwitch.isOn ? "" : "true")
     }
 
@@ -249,6 +317,7 @@ final class ConfigViewController: UIViewController {
     // MARK: - Actions
 
     @objc private func pickEnvironment(_ sender: UIButton) {
+        diag.tap("environment '\(sender.currentTitle ?? "test")'")
         LiveConfig.shared.setCredential("environment", sender.currentTitle ?? "test")
         syncEnvironmentChips()
     }
@@ -279,6 +348,7 @@ final class ConfigViewController: UIViewController {
     }
 
     @objc private func resetAll() {
+        diag.tap("Reset all")
         LiveConfig.shared.resetCredentials()
         fields.forEach { $0.text = "" }
         syncEnvironmentChips()

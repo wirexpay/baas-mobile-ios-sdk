@@ -53,7 +53,7 @@ final class RevealViewController: UIViewController {
         // unified log — the collect screen passes its own sink to show the other half. Everything a
         // sink receives has already been through the redactor; the level gate runs before the sink, so
         // nothing reaches here that the level did not permit. Values and tokens are never among the fields.
-        logging: osLogLogging(level: .info),
+        logging: WirexLogging(level: .info, sink: ConsoleLogSink()),
         // DEV/TEST ONLY, from the Config tab's "Screen capture" switch: off by default, so the value is
         // drawn in the secure layer (blank on the Simulator, black in a capture). Never ship it on.
         dangerouslyDisableScreenProtection: LiveConfig.shared.isScreenProtectionDisabled
@@ -243,6 +243,7 @@ final class RevealViewController: UIViewController {
             case .malformedEndpoints(let name): detail = "could not resolve endpoints for '\(name)'"
             }
             statusLabel.text = "Reveal unavailable — \(detail)"
+            diag.err("reveal unavailable: \(detail)")
         case .success(let environment):
             let key = LiveConfig.shared.environment + "|" + LiveConfig.shared.credential("chainId") + "|\(LiveConfig.shared.isScreenProtectionDisabled)"
             let reconfigured = reveal == nil || key != lastConfigKey
@@ -279,10 +280,12 @@ final class RevealViewController: UIViewController {
         } catch {
             session = nil
             let code = (error as? WirexError)?.code.rawValue ?? "unknown"
+            diag.err("reveal session: \(code)")
             statusLabel.text = "no session — \(code). Paste a cardId in Credentials (JSON)."
             flash("cardId is required")
             return
         }
+        diag.sdk("reveal: session created fields=\(fields.map(\.rawValue).joined(separator: ","))")
         created.onChange = { [weak self] snapshot in
             // A snapshot can change on any thread — a background clear, for instance.
             DispatchQueue.main.async { self?.renderStatus(snapshot) }
@@ -327,7 +330,7 @@ final class RevealViewController: UIViewController {
         } catch is WirexDeclined {
             flash("Declined — the reveal was abandoned")
         } catch {
-            // Cancelled: nothing to report.
+            diag.err("reveal load: \(type(of: error)) \(error.localizedDescription)")
         }
         renderStatus(session.snapshot)
     }
@@ -380,6 +383,8 @@ final class RevealViewController: UIViewController {
         LiveConfig.shared.appearance(osIsDark: traitCollection.userInterfaceStyle == .dark)
     }
 
+    private var lastRenderedStatus = ""
+
     private func renderStatus(_ snapshot: WirexRevealSnapshot) {
         let protection = rows.values.first?.isScreenshotProtectionActive
         let loaded = snapshot.loaded.map(\.rawValue).sorted()
@@ -390,9 +395,15 @@ final class RevealViewController: UIViewController {
         failed: \(failed.isEmpty ? ["—"] : failed)
         masked: \(isMasked)   capture-protected: \(protection.map(String.init) ?? "unknown")
         """
+        let line = "reveal: state=\(snapshot.state) loaded=\(loaded.joined(separator: ",")) failed=\(failed.joined(separator: ",")) masked=\(isMasked) protected=\(protection.map(String.init) ?? "?")"
+        if line != lastRenderedStatus {
+            lastRenderedStatus = line
+            diag.sdk(line)
+        }
     }
 
     private func flash(_ message: String) {
+        diag.app("reveal: \(message)")
         let banner = UILabel()
         banner.text = "  \(message)"
         banner.font = .systemFont(ofSize: 13)
@@ -430,17 +441,20 @@ final class RevealViewController: UIViewController {
         statusLabel.textColor = .secondaryLabel
 
         let controls = UIStackView(arrangedSubviews: [
-            buttonRow([("Load", { [weak self] in self?.load() }),
-                       ("Reveal", { [weak self] in self?.applyMask(false) }),
-                       ("Mask", { [weak self] in self?.applyMask(true) })]),
+            buttonRow([("Load", { [weak self] in diag.tap("Load"); self?.load() }),
+                       ("Reveal", { [weak self] in diag.tap("Reveal"); self?.applyMask(false) }),
+                       ("Mask", { [weak self] in diag.tap("Mask"); self?.applyMask(true) })]),
             buttonRow([("Clear", { [weak self] in
+                            diag.tap("Clear")
                             self?.session?.clear()
                             if let snapshot = self?.session?.snapshot { self?.renderStatus(snapshot) }
                         }),
                        ("New session", { [weak self] in
+                            diag.tap("New session")
                             self?.createSession()
                         }),
                        ("Decline next", { [weak self] in
+                            diag.tap("Decline next")
                             self?.credentials.declineNextActionToken = true
                             self?.flash("The next action-token will be declined")
                         })]),

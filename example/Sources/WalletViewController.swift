@@ -179,11 +179,13 @@ final class WalletViewController: UIViewController {
     @objc private func dismissKeyboard() { view.endEditing(true) }
 
     @objc private func insertSample() {
+        diag.tap("Sample (shape only)")
         providerConfigView.text = Self.sampleProviderConfig
         log.append("sample provider config inserted — the SHAPE of a provider block, not real config")
     }
 
     @objc private func mount() {
+        diag.tap("Mount checkout")
         view.endEditing(true)
         guard let config else { log.append(unavailableReason ?? "wallet unavailable"); return }
 
@@ -227,6 +229,7 @@ final class WalletViewController: UIViewController {
     }
 
     @objc private func rearm() {
+        diag.tap("New quote (rearm)")
         guard let checkout, let providerConfig = mountedProviderConfig else {
             log.append("nothing mounted — Mount checkout first")
             return
@@ -405,6 +408,7 @@ final class WalletViewController: UIViewController {
     // MARK: - Fetch estimate (verify a bearer; what your backend does)
 
     @objc private func fetchEstimate() {
+        diag.tap("Fetch estimate")
         Task { await performFetchEstimate() }
     }
 

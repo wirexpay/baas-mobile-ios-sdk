@@ -18,20 +18,22 @@ final class ConsoleLogSink: WirexLogSink, WirexWalletLogSink {
     private let lock = NSLock()
 
     func write(level: WirexLogLevel, event: String, fields: [String: String]) {
-        emit(event: event, fields: fields)
+        emit(level: "\(level)", event: event, fields: fields)
     }
 
     func write(level: WirexWalletLogLevel, event: String, fields: [String: String]) {
-        emit(event: event, fields: fields)
+        emit(level: "\(level)", event: event, fields: fields)
     }
 
-    private func emit(event: String, fields: [String: String]) {
+    /// The console and the diagnostic log the Config tab shares — the same scrubbed line in both.
+    private func emit(level: String, event: String, fields: [String: String]) {
         let rendered = fields.sorted { $0.key < $1.key }
             .map { "\($0.key)=\($0.value)" }
             .joined(separator: " ")
         // `print` writes the line and its terminator as separate calls, so two events on two
         // threads interleave into one unreadable line without this.
         lock.wirexWithLock { print("[wirex] \(event) \(rendered)") }
+        diag.sdk("\(level) \(event) \(rendered)".trimmingCharacters(in: .whitespaces))
     }
 }
 

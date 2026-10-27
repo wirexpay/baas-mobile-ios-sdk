@@ -211,6 +211,7 @@ final class AppearanceViewController: UIViewController {
 
     @objc private func applyPreset(_ sender: UIButton) {
         let preset = presets[sender.tag]
+        diag.tap("preset '\(preset.name)'")
         activePreset = preset
         writeAndApply(preset)
         status.text = "applied '\(preset.name)' — both surfaces restyled"
@@ -225,11 +226,13 @@ final class AppearanceViewController: UIViewController {
     }
 
     @objc private func applyAppearance() {
+        diag.tap("Apply appearance")
         activePreset = nil
         report(LiveConfig.shared.applyAppearance(json: appearanceField.text))
     }
 
     @objc private func reset() {
+        diag.tap("Reset appearance")
         activePreset = nil
         LiveConfig.shared.resetAppearance()
         appearanceField.text = ""
@@ -239,7 +242,9 @@ final class AppearanceViewController: UIViewController {
     private func report(_ outcome: ConfigOutcome) {
         switch outcome {
         case let .merged(summary): status.text = summary
-        case let .rejected(reason): status.text = "rejected: \(reason)"
+        case let .rejected(reason):
+            status.text = "rejected: \(reason)"
+            diag.err("appearance: \(reason)")
         }
     }
 
