@@ -21,8 +21,18 @@ final class EventLogView: UITextView {
         return formatter
     }()
 
+    /// Lines appended here also reach the diagnostic log, under this prefix.
+    var diagPrefix = "wallet"
+
     func append(_ line: String) {
         text = (text ?? "") + "\(Self.clock.string(from: Date())) \(line)\n"
+        scrollRangeToVisible(NSRange(location: (text as NSString).length, length: 0))
+        diag.sdk("\(diagPrefix): \(line)")
+    }
+
+    /// Replaces the whole text without logging — for a view that SHOWS the diagnostic log.
+    func replace(_ whole: String) {
+        text = whole
         scrollRangeToVisible(NSRange(location: (text as NSString).length, length: 0))
     }
 }

@@ -30,7 +30,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
 }
 
 /// Builds the window FROM ITS SCENE, which is the whole point of the file above.
-final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+final class SceneDelegate: UIResponder, UIWindowSceneDelegate, UITabBarControllerDelegate {
     var window: UIWindow?
 
     func scene(
@@ -42,7 +42,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         // A `wirexqa://seed?d=<base64url(JSON)>` deep link prefills the Config, so a partner or QA can
         // arm a device without typing. Applied before the tabs are built, so the first read sees it.
-        connectionOptions.urlContexts.forEach { LiveConfig.shared.applySeedLink($0.url) }
+        connectionOptions.urlContexts.forEach { LiveConfig.shared.applySeedLink($0.url, source: "launch url") }
 
         // Six tabs, the same set and order every platform's example carries. Config is first: a
         // per-field editor over `LiveConfig`, the single store the surfaces read. Reveal DISPLAYS a
@@ -66,6 +66,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         let tabs = UITabBarController()
         tabs.viewControllers = [config, reveal, collect, threeDS, wallet, appearance]
+        tabs.delegate = self
         // `-wirexScreen collect` opens straight onto the entry screen, so a scripted run does not
         // have to synthesise a tap on the tab bar.
         switch LaunchArgs.screen {
@@ -84,11 +85,18 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window.rootViewController = tabs
         window.makeKeyAndVisible()
         self.window = window
+        // The diagnostic log's process-wide hooks: launch header, foreground / background, keyboard.
+        // After the window exists, so the header can name the screen it is on.
+        DiagLog.shared.installHooks()
     }
 
     /// A deep link that arrives while the app is already running (the Config tab re-reads the store
     /// when it next appears; the reveal / collect surfaces read it live).
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-        URLContexts.forEach { LiveConfig.shared.applySeedLink($0.url) }
+        URLContexts.forEach { LiveConfig.shared.applySeedLink($0.url, source: "url") }
+    }
+
+    func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
+        diag.app("tab: \(viewController.tabBarItem.title ?? "?")")
     }
 }

@@ -116,6 +116,7 @@ final class CollectViewController: UIViewController {
                 chainId: LiveConfig.shared.credential("chainId")
             )
         } catch let unavailable as WirexEnvironmentUnavailable {
+            diag.err("collect unavailable: \(unavailable)")
             resultLabel.text = String(describing: unavailable)
             return
         } catch {
@@ -159,11 +160,18 @@ final class CollectViewController: UIViewController {
         render(form.state)
     }
 
+    private var lastRenderedState = ""
+
     private func render(_ state: WirexCollectState) {
         let perField = state.fields.map { field -> String in
             let mark = field.isValid ? "ok" : (field.isEmpty ? "empty" : "invalid")
             let touched = field.isTouched ? "" : " (untouched)"
             return "\(field.field.rawValue): \(mark)\(touched)"
+        }
+        let line = "collect: complete=\(state.isComplete) brand=\(state.brand.rawValue) \(perField.joined(separator: " "))"
+        if line != lastRenderedState {
+            lastRenderedState = line
+            diag.sdk(line)
         }
         stateLabel.text = """
         complete: \(state.isComplete)
@@ -179,17 +187,20 @@ final class CollectViewController: UIViewController {
     /// Switches the policy on the LIVE form — no rebuild, so what is typed survives.
     @objc private func switchErrorLine(_ sender: UISegmentedControl) {
         errorLine = [.animated, .reserved, .hidden][sender.selectedSegmentIndex]
+        diag.tap("error line '\(errorLine)'")
         form?.errorLine = errorLine
     }
 
     @objc private func switchProfile(_ sender: UISegmentedControl) {
         profile = sender.selectedSegmentIndex == 0 ? .topup : .octDestination
+        diag.tap("profile '\(profile)'")
         resultLabel.text = "—"
         rebuildForm()
     }
 
     @objc private func tokenize() {
-        guard let form else { return }
+        diag.tap("Tokenize")
+        guard let form else { diag.err("tokenize: no form"); return }
         resultLabel.text = "submitting…"
         tokenizeButton.isEnabled = false
 
@@ -216,6 +227,7 @@ final class CollectViewController: UIViewController {
                     \(token.brand.rawValue) •••• \(token.last4)  bin \(token.bin)
                     expiry: \(token.expiryMonth)/\(token.expiryYear)
                     """
+                    diag.sdk("tokenize topup: ok cardId=\(token.cardId.count) chars brand=\(token.brand.rawValue) last4=\(token.last4)")
                 case .octDestination:
                     let token = try await form.tokenizeOctDestination(
                         WirexOctTokenizeParams(
@@ -229,6 +241,7 @@ final class CollectViewController: UIViewController {
                     externalCardId: \(token.externalCardId)
                     \(token.brand.rawValue) •••• \(token.last4)  bin \(token.bin)
                     """
+                    diag.sdk("tokenize oct: ok externalCardId=\(token.externalCardId.count) chars brand=\(token.brand.rawValue) last4=\(token.last4)")
                 }
             } catch let error as WirexError {
                 // The WHOLE error, not `code` and `retryable` picked out of it.
@@ -239,8 +252,10 @@ final class CollectViewController: UIViewController {
                 // fields threw away the one that says which, and a screen that reports a failure
                 // without saying what kind sends whoever is integrating to a packet capture.
                 resultLabel.text = "failed: \(error)"
+                diag.err("tokenize: \(error.code.rawValue) retryable=\(error.retryable) \(error)")
             } catch {
                 resultLabel.text = "failed"
+                diag.err("tokenize: \(type(of: error)) \(error.localizedDescription)")
             }
             render(form.state)
         }
@@ -253,7 +268,9 @@ final class CollectViewController: UIViewController {
     /// pretending about, and the SDK's own restyle path (the Appearance tab) is the one that must
     /// preserve input.
     @objc private func applyStrings() {
+        diag.tap("Apply strings")
         guard let parsed = WirexCollectStrings.fromJson(stringsField.text) else {
+            diag.err("strings: not valid JSON")
             resultLabel.text = "strings: not valid JSON"
             return
         }
@@ -263,11 +280,13 @@ final class CollectViewController: UIViewController {
     }
 
     @objc private func resetStrings() {
+        diag.tap("Reset strings")
         stringsField.text = Self.defaultStringsJson
         applyStrings()
     }
 
     @objc private func clearForm() {
+        diag.tap("Clear")
         form?.clear()
         resultLabel.text = "—"
     }

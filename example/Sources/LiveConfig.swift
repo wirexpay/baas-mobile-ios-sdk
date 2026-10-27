@@ -103,9 +103,13 @@ final class LiveConfig {
     /// `applyCredentials`. `notify` is false while a field is mid-edit (every keystroke) and true when
     /// it ends, so a screen rebuilds once on blur rather than on every character.
     func setCredential(_ key: String, _ value: String, notify: Bool = true) {
-        lock.wirexWithLock {
+        let changed: Bool = lock.wirexWithLock {
+            let before = credentials[key] ?? ""
             if value.isEmpty { credentials.removeValue(forKey: key) } else { credentials[key] = value }
+            return before != value
         }
+        // Key and length only — never the value.
+        if changed { diag.config(value.isEmpty ? "cleared \(key)" : "set \(key) (\(value.count) chars)") }
         if notify { announceCredentialsChange() }
     }
 
@@ -132,30 +136,70 @@ final class LiveConfig {
     /// bearer and action token included; the RN example names identity `userWallet` / `userEmail`,
     /// which map to this example's `wallet` / `email`. A real integration mints these from its own auth
     /// and the user's wallet; this only saves typing on a test device.
-    @discardableResult
-    func applySeedLink(_ url: URL) -> Int? {
-        guard url.scheme == "wirexqa", url.host == "seed",
-              let d = URLComponents(url: url, resolvingAgainstBaseURL: false)?
-                  .queryItems?.first(where: { $0.name == "d" })?.value,
-              let data = Self.base64urlDecode(d),
-              let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-        else { return nil }
-        let aliases = ["userWallet": "wallet", "userEmail": "email"]
-        var applied = 0
-        for (rawKey, value) in obj {
-            let string = (value as? String) ?? "\(value)"
-            guard !string.isEmpty else { continue }
-            setCredential(aliases[rawKey] ?? rawKey, string, notify: false)
-            applied += 1
+    /// How a seed link was handled: the keys it set, or why it was refused.
+    enum SeedOutcome {
+        case applied([String])
+        case rejected(String)
+
+        var appliedCount: Int? {
+            if case .applied(let keys) = self { return keys.count }
+            return nil
         }
-        announceCredentialsChange()
-        return applied
+    }
+
+    /// `source` names the delivery path (`url`, `launch url`, `paste`) for the diagnostic log.
+    @discardableResult
+    func applySeedLink(_ url: URL, source: String = "url") -> SeedOutcome {
+        let text = url.absoluteString
+        diag.link("received \(url.scheme ?? "?")://\(url.host ?? "") (\(text.count) chars) source=\(source)")
+        let outcome = seed(url)
+        switch outcome {
+        case .applied(let keys): diag.link("applied \(keys.count) values: \(keys.joined(separator: ","))")
+        case .rejected(let reason): diag.link("rejected: \(reason)")
+        }
+        return outcome
     }
 
     @discardableResult
-    func applySeedLink(_ text: String) -> Int? {
-        guard let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)) else { return nil }
-        return applySeedLink(url)
+    func applySeedLink(_ text: String, source: String = "paste") -> SeedOutcome {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed) else {
+            diag.link("received text (\(trimmed.count) chars) source=\(source)")
+            diag.link("rejected: not a URL")
+            return .rejected("not a URL")
+        }
+        return applySeedLink(url, source: source)
+    }
+
+    private func seed(_ url: URL) -> SeedOutcome {
+        guard url.scheme == "wirexqa" else {
+            return .rejected("scheme '\(url.scheme ?? "")' is not accepted by this example (accepts: wirexqa)")
+        }
+        guard url.host == "seed" else { return .rejected("host is '\(url.host ?? "")', expected seed") }
+        guard let d = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "d" })?.value, !d.isEmpty
+        else { return .rejected("no d= parameter") }
+        guard let data = Self.base64urlDecode(d) else { return .rejected("base64 decode failed") }
+        let obj: [String: Any]
+        do {
+            guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                return .rejected("JSON parse failed: not an object")
+            }
+            obj = parsed
+        } catch {
+            return .rejected("JSON parse failed: \(error.localizedDescription)")
+        }
+        let aliases = ["userWallet": "wallet", "userEmail": "email"]
+        var applied: [String] = []
+        for (rawKey, value) in obj.sorted(by: { $0.key < $1.key }) {
+            let string = (value as? String) ?? "\(value)"
+            guard !string.isEmpty else { continue }
+            let key = aliases[rawKey] ?? rawKey
+            setCredential(key, string, notify: false)
+            applied.append(key)
+        }
+        announceCredentialsChange()
+        return .applied(applied)
     }
 
     private static func base64urlDecode(_ input: String) -> Data? {
@@ -167,6 +211,7 @@ final class LiveConfig {
     /// Clears every credential / identity value back to empty (environment falls back to `test`).
     func resetCredentials() {
         lock.wirexWithLock { credentials.removeAll() }
+        diag.config("reset all")
         announceCredentialsChange()
     }
 
