@@ -187,7 +187,8 @@ final class LiveConfig {
             }
             obj = parsed
         } catch {
-            return .rejected("JSON parse failed: \(error.localizedDescription)")
+            // SECURITY: never the parser's message — it can quote the payload, bearer included.
+            return .rejected("JSON parse failed: the link looks cut short (\(url.absoluteString.count) chars, \(data.count) decoded) — copy the whole link again")
         }
         let aliases = ["userWallet": "wallet", "userEmail": "email"]
         var applied: [String] = []
