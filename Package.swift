@@ -1,7 +1,7 @@
 // swift-tools-version:5.9
 import PackageDescription
 
-let version = "0.3.15"
+let version = "0.3.16"
 
 let package = Package(
     name: "WirexMobileSDK",
@@ -13,7 +13,7 @@ let package = Package(
         .binaryTarget(
             name: "WirexMobileSDK",
             url: "https://github.com/wirexpay/baas-mobile-ios-sdk/releases/download/\(version)/WirexMobileSDK.xcframework.zip",
-            checksum: "4f6c986c391cb1a6cd1675ed7dcaa18768c22100ab9c04cf1c883427af590030"
+            checksum: "b0bfd6247cdc9f5ea8f99b84676092e2152ff316f08e5eba9a7bc46691cc1fc4"
         ),
     ]
 )
