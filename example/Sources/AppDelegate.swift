@@ -44,7 +44,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate, UITabBarControlle
         // arm a device without typing. Applied before the tabs are built, so the first read sees it.
         connectionOptions.urlContexts.forEach { LiveConfig.shared.applySeedLink($0.url, source: "launch url") }
 
-        // Six tabs, the same set and order every platform's example carries. Config is first: a
+        // Seven tabs, the same set and order every platform's example carries. Config is first: a
         // per-field editor over `LiveConfig`, the single store the surfaces read. Reveal DISPLAYS a
         // card the user owns; collect CAPTURES one they type; they share credentials and appearance
         // through `LiveConfig`, and nothing else — the two SDKs are peers and neither imports the other.
@@ -60,13 +60,17 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate, UITabBarControlle
         // from the one name this example is built for.
         let wallet = WalletViewController()
         wallet.tabBarItem = UITabBarItem(title: "Wallet", image: nil, tag: 4)
+        // Stocks and coins, signed in the app with the test user's key.
+        let trade = TradeViewController()
+        trade.tabBarItem = UITabBarItem(title: "Trade", image: nil, tag: 5)
         // Styling is its own tab because it applies to every surface.
         let appearance = AppearanceViewController()
-        appearance.tabBarItem = UITabBarItem(title: "Appearance", image: nil, tag: 5)
+        appearance.tabBarItem = UITabBarItem(title: "Appearance", image: nil, tag: 6)
 
         let tabs = UITabBarController()
-        tabs.viewControllers = [config, reveal, collect, threeDS, wallet, appearance]
+        tabs.viewControllers = [config, reveal, collect, threeDS, wallet, trade, appearance]
         tabs.delegate = self
+        tabs.viewControllers?.forEach { Self.themeUnderMore($0.navigationItem) }
         // `-wirexScreen collect` opens straight onto the entry screen, so a scripted run does not
         // have to synthesise a tap on the tab bar.
         switch LaunchArgs.screen {
@@ -75,7 +79,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate, UITabBarControlle
         case "collect": tabs.selectedIndex = 2
         case "threeds": tabs.selectedIndex = 3
         case "wallet": tabs.selectedIndex = 4
-        case "appearance": tabs.selectedIndex = 5
+        case "trade": tabs.selectedIndex = 5
+        case "appearance": tabs.selectedIndex = 6
         default: break
         }
 
@@ -94,6 +99,21 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate, UITabBarControlle
     /// when it next appears; the reveal / collect surfaces read it live).
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         URLContexts.forEach { LiveConfig.shared.applySeedLink($0.url, source: "url") }
+    }
+
+    /// A screen shows a navigation bar only under More. Its own item carries the theme's text colour,
+    /// so the title and back button read on the dark screens while the system More list keeps its look.
+    private static func themeUnderMore(_ item: UINavigationItem) {
+        let text: [NSAttributedString.Key: Any] = [.foregroundColor: Theme.text]
+        let appearance = UINavigationBarAppearance()
+        appearance.titleTextAttributes = text
+        appearance.largeTitleTextAttributes = text
+        appearance.backButtonAppearance.normal.titleTextAttributes = text
+        let chevron = UIImage(systemName: "chevron.backward")?.withTintColor(Theme.text, renderingMode: .alwaysOriginal)
+        appearance.setBackIndicatorImage(chevron, transitionMaskImage: chevron)
+        item.standardAppearance = appearance
+        item.compactAppearance = appearance
+        item.scrollEdgeAppearance = appearance
     }
 
     func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {

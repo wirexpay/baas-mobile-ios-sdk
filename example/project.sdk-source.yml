@@ -1,0 +1,10 @@
+# DEV ONLY: builds the example against a local checkout of the SDK's source instead of the published package.
+#
+#   WIREX_SDK_SOURCE=/path/to/baas-ios-sdk/sdk/ios xcodegen generate --spec project.sdk-source.yml
+#
+# Plain `xcodegen generate` keeps the published package, which is what partners and CI build.
+include:
+  - path: project.yml
+packages:
+  WirexMobileSDK:
+    path: ${WIREX_SDK_SOURCE}

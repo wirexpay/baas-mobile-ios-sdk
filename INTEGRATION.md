@@ -1,12 +1,12 @@
 # Wirex Mobile SDK for iOS — Integration Guide
 
-One Swift package, four sealed surfaces: card **Reveal**, card **Collect**, **3-D Secure** and **Wallet** top-up with Apple Pay. This guide covers what each surface needs, where the credentials come from, how to style the views, and how to run the example app. Every snippet below is type-checked against `WirexMobileSDK` 0.3.15.
+One Swift package, four sealed surfaces: card **Reveal**, card **Collect**, **3-D Secure** and **Wallet** top-up with Apple Pay. Plus **Trade**, which runs stock and coin trades your app signs. This guide covers what each surface needs, where the credentials come from, how to style the views, and how to run the example app. Every snippet below is type-checked against `WirexMobileSDK` 0.3.15.
 
-<!-- badges: Native iOS · Swift · UIKit | WirexMobileSDK 0.3.15 · Swift Package / CocoaPods | Reveal · Collect · 3-D Secure · Wallet -->
+<!-- badges: Native iOS · Swift · UIKit | WirexMobileSDK 0.3.15 · Swift Package / CocoaPods | Reveal · Collect · 3-D Secure · Wallet · Trade -->
 
 ## 1. What the SDK does
 
-The SDK owns **sealed UI surfaces** and nothing else. A revealed card number, a card the user is typing and a wallet payment token live inside a native view or a Wirex-hosted web frame and **never reach your app code**. The SDK never mints a credential, never stores one, and never moves money on its own.
+The SDK owns **sealed UI surfaces** and nothing else. A revealed card number, a card the user is typing and a wallet payment token live inside a native view or a Wirex-hosted web frame and **never reach your app code**. The SDK never mints a credential, never stores one, and never moves money on its own. A trade moves only on a signature your app gives.
 
 Your app supplies two things:
 
@@ -19,6 +19,7 @@ Your app supplies two things:
 | Collect | yes | Captures an external card in a sealed native form and tokenizes it at the acquirer. |
 | 3-D Secure | **no** | Renders the issuer challenge for a card payment and reports the outcome. |
 | Wallet | yes | Embeds the Wirex-hosted Apple Pay checkout for a backend-priced top-up. |
+| Trade | a bearer and a signer | Buys and sells US stocks and coins from the user's account. It draws no view; your app signs each step. |
 
 :::diagram model Apple Pay
 
@@ -365,7 +366,56 @@ func describe(_ error: Error) {
 - `WirexEnvironmentUnavailable` is thrown by `WirexEnvironment.resolve(_:chainId:)` and `WirexWalletEnvironment.resolve(_:)` for an unknown name or an empty `chainId`; the `create(...)` factories return `nil` instead. Show the reason; never fall back to another environment.
 - `WirexDeclined` is not an error state: the user said no, and nothing was sent.
 
-## 10. Your backend
+## 10. Trade {creds|signer}
+
+`WirexTrade` buys and sells US stocks and coins. It trades from the user's main account on Base or Arc, through an investment account on Base. It draws no view: your app shows the numbers, and the SDK runs each step and reports it. `Trade` needs the SDK version that adds it; see [`CHANGELOG.md`](CHANGELOG.md).
+
+Your app supplies two objects:
+
+- **A token provider** (`WirexTradeTokenProvider`). `accessToken()` answers the user's bearer. It is not the card surfaces' credential provider, and it sends no identity header.
+- **A signer** (`WirexTradeSigner`). `address` is the owner's address. `signPersonal(hash:)` signs the 32 bytes it is given per EIP-191 and answers 65 bytes, `r ‖ s ‖ v`. Sign in the user's wallet: the SDK never holds a key.
+
+```swift
+import Foundation
+import WirexMobileSDK
+
+final class AppTradeTokens: WirexTradeTokenProvider {
+    func accessToken() async throws -> String { "<bearer for the signed-in user>" }
+}
+
+final class AppTradeSigner: WirexTradeSigner {
+    let address = "<the owner's address>"
+
+    func signPersonal(hash: Data) async throws -> Data {
+        // Ask the user's wallet to sign the 32 bytes as a personal message (EIP-191).
+        throw CancellationError()
+    }
+}
+
+func buyOneDollarOfStock() async throws -> WirexTradeOrder {
+    let trade = try WirexTrade.create(
+        testMode: false, chainId: "<chain id>", tokenProvider: AppTradeTokens(), signer: AppTradeSigner())
+    if try await !trade.account().isSetUp {
+        _ = try await trade.setUpAccount { event in print(event.step, event.state) }
+    }
+    let quote = try await trade.quote(market: .stock, side: .buy, symbol: "AAPL", amount: "1")
+    return try await trade.execute(quote) { event in print(event.step, event.state, event.status ?? "") }
+}
+```
+
+- **Members.** `account()`, `setUpAccount(onStep:)`, `catalog()`, `quote(market:side:symbol:amount:)`, `execute(_:onStep:)`, `openOrders()` and `resume(orderId:quote:onStep:)`.
+- **Amounts.** `amount` is decimal text: USD on a buy, the token on a sale. Every amount the SDK answers is base units as decimal text, with its `decimals`.
+- **The set-up.** A buy needs the investment account. Call `setUpAccount` once per user when `account().isSetUp` is false.
+- **The ended order.** `execute` answers the order once it ends: `Completed`, `Returned`, `Failed` with its `statusReason`, or `Expired`. It throws only when it cannot carry on, and the order then stays open.
+- **Resume.** The SDK keeps nothing between calls, so a trade carries on after your app restarts. `openOrders()` lists the orders that have not ended, each with its `nextStep`. `resume(orderId:quote:onStep:)` carries one on. Pass the quote that made the order while you still hold it. A store or a swap that never went needs it, and fails with `quote_required` without it.
+- **Steps.** `onStep` gets each change of `setup`, `check`, `store`, `submit`, `fundRequest`, `fundExecute`, `swap`, `awaitOrder`, `burn` and `sweep`, as `started`, `done` or `failed`. A mined send carries its `userOpHash` and `transactionHash`. The handler runs off the main thread.
+- **Refunds on Arc.** On an Arc company, a failed or expired buy's refund stays in the investment account. The sweep at the end of `execute` or `resume` brings it back. Until then it shows in `account().cash`.
+- **Errors.** Every failure is a `WirexTradeError`. `reason` is one name, and `step`, `orderId`, `routeReason`, `detailKey`, `httpStatus` and `entryPointCode` are set when they apply. It never carries an amount, an address or a hash.
+- **Common reasons.** `investment_wallet_required`: set up the account first. `signer_mismatch`: the signer's address does not own the main account. `quote_expired`: get a new quote. `insufficient_funds`: the main account cannot cover the buy. `order_not_ended`: the order is still open, so resume it later.
+- **Environments.** The full trade runs on `production`. On `test`, the catalog and quotes work, but the set-up and trades cannot run.
+- **Limits.** The SDK applies no amount limit of its own. Add one in your app if you want one: the example refuses a production trade worth more than 10 USD.
+
+## 11. Your backend
 
 The SDK makes none of these calls. Your backend performs them with the partner credentials Wirex issued, and the app passes the results in:
 
@@ -376,11 +426,13 @@ The SDK makes none of these calls. Your backend performs them with the partner c
 
 Authenticated calls carry `Authorization: Bearer`, `X-Chain-Id` and one identity header (`X-User-Email` or `X-User-Wallet`, never both). For exact paths and payloads see the Wirex BaaS API reference provided with your integration.
 
-## 11. The example app
+## 12. The example app
 
-[`example/`](example/) is a UIKit app that exercises all four surfaces against your own data; nothing is compiled in. Generate the project with `xcodegen generate` (the `project.yml` resolves `WirexMobileSDK` from this repository) and open `WirexMobileSdkExample.xcodeproj`. The **Config** tab is a per-field editor for the environment, the integration parameters (chain id, identity, card id, cardholder name) and the secrets (bearer, step-up action token); values live in memory only, and every screen reads them live. The **Wallet** screen takes an estimation id and the provider block, and its **Fetch estimate** button prices a top-up through the BaaS API with your bearer, so you can get a real estimation id without standing up a backend. The **Appearance** tab restyles every sealed surface at once. The field list is in [`PARTNER-CONFIG.md`](PARTNER-CONFIG.md). Reveal values render blank on the Simulator and the Pay sheet needs a real device.
+[`example/`](example/) is a UIKit app that exercises all four surfaces and Trade against your own data; nothing is compiled in. Generate the project with `xcodegen generate` (the `project.yml` resolves `WirexMobileSDK` from this repository) and open `WirexMobileSdkExample.xcodeproj`. The **Config** tab is a per-field editor for the environment, the integration parameters (chain id, identity, card id, cardholder name) and the secrets (bearer, step-up action token); values live in memory only, and every screen reads them live. The **Wallet** screen takes an estimation id and the provider block, and its **Fetch estimate** button prices a top-up through the BaaS API with your bearer, so you can get a real estimation id without standing up a backend. The **Appearance** tab restyles every sealed surface at once. The field list is in [`PARTNER-CONFIG.md`](PARTNER-CONFIG.md). Reveal values render blank on the Simulator and the Pay sheet needs a real device.
 
-## 12. Patterns from a production integration
+The **Trade** tab runs a stock or coin trade end to end. It signs with a test user's key, which it holds in memory only and takes from the launch environment or the Config tab. It logs in with that key, and refuses a production trade worth more than 10 USD.
+
+## 13. Patterns from a production integration
 
 The SDK ships inside a production cardholder app built on the same BaaS API. The patterns below are not required by the API; they are what that integration settled on, with the app-specific parts removed.
 
@@ -529,7 +581,7 @@ final class WalletArming {
 - **One `checkoutToken` per armed quote.** Mint it on your backend for the quote you are about to arm; a re-arm mints again. Never hand the user's session bearer to the frame.
 - **A failed mint is not fatal in-app.** Run legacy mode instead: the frame tokenizes and your backend executes. Keep `debug` off outside development builds.
 
-## 13. Troubleshooting
+## 14. Troubleshooting
 
 - **A revealed field is blank.** Simulator (secure layer), or the row was given a height smaller than `naturalHeight`.
 - **`create(...)` returns `nil`.** This build has no endpoints for that side, or `chainId` is empty. Call `WirexEnvironment.resolve(_:chainId:)` to get the reason.
@@ -538,3 +590,5 @@ final class WalletArming {
 - **The Pay button is unavailable.** The checker was not started, the provider block is empty, or you are on the Simulator.
 - **3-D Secure ends in `pending`.** Not an error. Settle by your backend's status.
 - **Both `userEmail` and `userWallet` are set.** The backend answers `400`. Return exactly one.
+- **A trade fails with `signer_mismatch`.** The signer's address does not own the main account. Sign with the owner's key.
+- **A trade fails with `order_not_ended`.** The order is still open. Find it with `openOrders()` and carry it on with `resume`.
