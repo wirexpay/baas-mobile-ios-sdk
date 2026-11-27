@@ -17,12 +17,13 @@ the provider block, or fetches an estimate with your bearer.
 | Field | What it is | Who gives it |
 |---|---|---|
 | `chainId` | `X-Chain-Id` — the chain the partner operates on | **Wirex**, per integration |
+| `companyId` | `X-Company-Id` on the Trade login — the company the test user belongs to | **Wirex**, per integration |
 | `clientId` | `?client=` on the hosted pages (optional) | **Wirex** |
 | `userEmail` / `userWallet` | identity headers `X-User-Email` / `X-User-Wallet` | partner (the signed-in user) |
 | `cardId` | the card Reveal / Collect act on | partner (a provisioned card) |
 | `cardholderName` | display name on Collect | partner |
 | `walletAmount` / `walletCurrency` / `walletProvider` | the top-up quote the Wallet screens arm with | partner (from an estimate) |
-| `baasApiUrl` | the BaaS API base URL (https) for the Wallet screen's **Fetch estimate** helper; pricing is the partner backend's job, the helper only verifies a bearer | **Wirex**, per environment |
+| `baasApiUrl` | the BaaS API host (https, no path). The Trade login and the Wallet screen's **Fetch estimate** helper call it; pricing is the partner backend's job, the helper only verifies a bearer | **Wirex**, per environment |
 | `returnUrl` | Custom Tab App Link — **https, verified for this app's package** (`assetlinks.json`) | partner |
 
 ### Secrets (memory only — never persisted, never logged)
@@ -31,6 +32,28 @@ the provider block, or fetches an estimate with your bearer.
 | `bearer` | `getAccessToken` — Wirex bearer for the user | minted by the partner's auth |
 | `actionToken` | `getActionToken` — step-up for card data / PIN | the user's **wallet signature**, exchanged by the partner's backend |
 | `checkoutToken` | token mode — the short-lived top-up token | minted by the **partner's backend** |
+| `ownerKey` | **TESTING ONLY.** The test user's exported private key. It signs the Trade login and each trade step. A pasted `bearer` wins over the login | the user's **own wallet**, which signs; a real app never holds a key |
+
+### Where the values come from
+
+The four Trade fields are `environment`, `chainId`, `companyId` and `ownerKey`. A higher source wins over a lower one.
+
+| Order | Source | Notes |
+|---|---|---|
+| 1, highest | The env or a local file, in a debug build only | The Config tab shows these fields read-only |
+| 2 | The **Config** tab | `ownerKey` stays in memory only |
+| 3 | A `wirexqa://seed` link | Never carries `ownerKey`: a link that does is refused whole |
+
+The env or file source per platform:
+
+| Platform | Source |
+|---|---|
+| iOS | The launch environment, from the Xcode scheme or `SIMCTL_CHILD_*`: `WIREX_ENVIRONMENT`, `WIREX_CHAIN_ID`, `WIREX_COMPANY_ID`, `WIREX_OWNER_KEY` and `WIREX_BAAS_API_URL`. `example/tools/run-trade.sh` passes them from the gitignored `example/trade.local.env` |
+| Android | Intent extras, through `adb shell am start -e` |
+| React Native and Flutter | A gitignored `e2e.local.json`, read only in debug builds |
+| Web | `.env.local` |
+
+CI checkouts never have the file, so no distributed build carries a key.
 
 ### Dev options
 | Toggle | What it does |
@@ -46,6 +69,7 @@ the provider block, or fetches an estimate with your bearer.
 | **3DS step-up** | environment; a top-up orchestrator URL (the 3DS screen takes it directly — the SDK makes no call and needs no credentials) |
 | **Wallet — Apple Pay / Google Pay** | environment, chainId, bearer, walletProvider, walletAmount/Currency; paste the estimation id + provider config on the Wallet screen |
 | **Wallet — token mode** | the above + a `checkoutToken` your backend minted |
+| **Trade** (stocks and coins) | environment, chainId, ownerKey; and companyId with baasApiUrl for the login, or a pasted bearer. A full trade runs only on `production`, where the tab refuses a trade worth more than 10 USD |
 
 ## Credentials in a real integration
 

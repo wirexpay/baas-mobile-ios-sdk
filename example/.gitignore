@@ -10,3 +10,7 @@ Pods/
 Podfile.lock
 # macOS
 .DS_Store
+# The Trade tab's launch values, the test user's key among them. Only the `.example` file is tracked.
+*.local.env
+.env
+.env.*

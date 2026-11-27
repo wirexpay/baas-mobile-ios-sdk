@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Trade: `WirexTrade` buys and sells US stocks and coins from a main account on Base or Arc, through an investment account on Base. `WirexTrade.create(testMode:chainId:tokenProvider:signer:)` takes the partner's chain, a bearer source (`WirexTradeTokenProvider`) and the host's signer (`WirexTradeSigner`). It has seven members: `account`, `setUpAccount`, `catalog`, `quote`, `execute`, `openOrders` and `resume`.
+- Trade: the host app signs. The SDK hands it a 32-byte hash and takes back 65 bytes; no key enters the SDK. Each step reports through `onStep`, and each failure is a `WirexTradeError` with one reason name.
+- Trade: nothing is kept between calls. `openOrders` and `resume` read where an order stands, so a trade carries on after the app restarts.
+- Example: a **Trade** tab runs a trade end to end. It signs with a test user's key from the launch environment or the Config tab, held in memory only, and logs in with it. It refuses a production trade worth more than 10 USD.
+
 ## 0.3.15
 
 - 3-D Secure: the challenge now renders inside a Flutter host. The step-up view no longer moves the box the host owns; a host that re-assigns the box's frame while nothing is showing (Flutter does, every frame) left the challenge off-screen.

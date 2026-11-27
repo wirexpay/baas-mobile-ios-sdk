@@ -22,6 +22,14 @@ packages:
   WirexMobileSDK:
     url: https://github.com/wirexpay/baas-mobile-ios-sdk.git
     from: "0.3.15"
+  # The Trade tab's test-only signer (TestOnlySigner.swift). The example depends on these, the SDK never.
+  # 0.21.1 is the last P256K whose C modules are always on: from 0.22 they hang on traits, which Xcode ignores.
+  P256K:
+    url: https://github.com/21-DOT-DEV/swift-secp256k1.git
+    exactVersion: "0.21.1"
+  CryptoSwift:
+    url: https://github.com/krzyzanowskim/CryptoSwift.git
+    exactVersion: "1.10.0"
 
 targets:
   WirexMobileSdkExample:
@@ -32,9 +40,34 @@ targets:
     dependencies:
       - package: WirexMobileSDK
         product: WirexMobileSDK
+      - package: P256K
+        product: P256K
+      - package: CryptoSwift
+        product: CryptoSwift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.wirexapp.baas.example.ios
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1,2"
         INFOPLIST_FILE: Info.plist
+    # The scheme runs the unit tests below with `xcodebuild test`.
+    scheme:
+      testTargets:
+        - WirexMobileSdkExampleTests
+
+  # Unit tests for the Trade tab's money guard, signer and lines. No UI tests: a person taps the trade.
+  WirexMobileSdkExampleTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests
+    dependencies:
+      - target: WirexMobileSdkExample
+      # The tests build `WirexTradeQuote` and `WirexTradeError`, so they link the SDK themselves.
+      - package: WirexMobileSDK
+        product: WirexMobileSDK
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.wirexapp.baas.example.ios.tests
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST_FILE: YES

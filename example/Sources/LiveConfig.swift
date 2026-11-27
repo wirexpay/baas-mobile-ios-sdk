@@ -31,12 +31,20 @@ final class LiveConfig {
 
 
 
+    /// Keys the launch environment set. They win over the Config tab and a seed link.
+    private let pinned: [String: String]
+
     private init() {
         // Credentials and identity are entered in the app (the "credentials" box), never passed on
         // the command line — a bearer in a process's argument vector is visible in `ps` and in crash
-        // logs. The map starts empty; paste to fill it.
-        credentials = [:]
+        // logs. The one exception is the Trade tab's launch environment, read in a debug build only.
+        pinned = LaunchEnvironment.values()
+        credentials = pinned
+        if !pinned.isEmpty { diag.config("launch environment set \(pinned.keys.sorted().joined(separator: ", "))") }
     }
+
+    /// Whether the launch environment set this key, so the Config tab shows it read-only.
+    func isPinned(_ key: String) -> Bool { pinned[key] != nil }
 
     // MARK: - Credentials
 
@@ -50,6 +58,8 @@ final class LiveConfig {
 
         let known = [
             "environment", "bearer", "email", "wallet", "cardId", "chainId", "actionToken", "cardholderName", "baasApiUrl",
+            // The Trade tab: the company the login names, and the test user's key, memory only.
+            "companyId", "ownerKey",
             // Screen-capture protection. Only "true" disables it; unset / anything else keeps it ON — the
             // secure default. Set it from the Config tab or a seed link to let QA capture the surfaces.
             "disableScreenProtection",
@@ -60,10 +70,12 @@ final class LiveConfig {
         var applied: [String] = []
         var cleared: [String] = []
         var unknown: [String] = []
+        var kept: [String] = []
 
         lock.wirexWithLock {
             for (key, value) in parsed {
                 guard known.contains(key) else { unknown.append(key); continue }
+                guard pinned[key] == nil else { kept.append(key); continue }
                 guard let text = value as? String else { continue }
                 // An EMPTY string clears the key. Merge semantics are "a key you did not mention keeps
                 // its value" — an empty string mentions it, so treating that as "not mentioned" left a
@@ -80,11 +92,12 @@ final class LiveConfig {
             }
         }
 
-        if applied.isEmpty && cleared.isEmpty && unknown.isEmpty {
+        if applied.isEmpty && cleared.isEmpty && unknown.isEmpty && kept.isEmpty {
             return .rejected("no recognised keys")
         }
         var summary = "merged: \(applied.sorted().joined(separator: ", "))"
         if !cleared.isEmpty { summary += " · CLEARED: \(cleared.sorted().joined(separator: ", "))" }
+        if !kept.isEmpty { summary += " · KEPT from the launch environment: \(kept.sorted().joined(separator: ", "))" }
         // Named rather than ignored: a typo in a key would otherwise look like a successful paste.
         if !unknown.isEmpty { summary += " · IGNORED unknown: \(unknown.sorted().joined(separator: ", "))" }
         return .merged(summary)
@@ -103,6 +116,10 @@ final class LiveConfig {
     /// `applyCredentials`. `notify` is false while a field is mid-edit (every keystroke) and true when
     /// it ends, so a screen rebuilds once on blur rather than on every character.
     func setCredential(_ key: String, _ value: String, notify: Bool = true) {
+        guard pinned[key] == nil else {
+            diag.config("kept \(key) from the launch environment")
+            return
+        }
         let changed: Bool = lock.wirexWithLock {
             let before = credentials[key] ?? ""
             if value.isEmpty { credentials.removeValue(forKey: key) } else { credentials[key] = value }
@@ -133,7 +150,8 @@ final class LiveConfig {
     /// Applies a `wirexqa://seed?d=<base64url(JSON)>` link — the deep link the example registers — from
     /// the launch URL or from text pasted into the Config tab. Returns how many values were set, or nil
     /// when it is not a seed link (other scheme or host, no `d`, undecodable). Any key is applied, the
-    /// bearer and action token included; the RN example names identity `userWallet` / `userEmail`,
+    /// bearer and action token included, except a launch-environment key; a link with `ownerKey` is
+    /// refused whole. The RN example names identity `userWallet` / `userEmail`,
     /// which map to this example's `wallet` / `email`. A real integration mints these from its own auth
     /// and the user's wallet; this only saves typing on a test device.
     /// How a seed link was handled: the keys it set, or why it was refused.
@@ -190,12 +208,15 @@ final class LiveConfig {
             // SECURITY: never the parser's message — it can quote the payload, bearer included.
             return .rejected("JSON parse failed: the link looks cut short (\(url.absoluteString.count) chars, \(data.count) decoded) — copy the whole link again")
         }
+        // SECURITY: a link travels in chats and QR codes, and a key never expires the way a bearer does.
+        guard obj["ownerKey"] == nil else { return .rejected("a seed link never carries ownerKey") }
         let aliases = ["userWallet": "wallet", "userEmail": "email"]
         var applied: [String] = []
         for (rawKey, value) in obj.sorted(by: { $0.key < $1.key }) {
             let string = (value as? String) ?? "\(value)"
             guard !string.isEmpty else { continue }
             let key = aliases[rawKey] ?? rawKey
+            guard pinned[key] == nil else { continue }
             setCredential(key, string, notify: false)
             applied.append(key)
         }
@@ -211,7 +232,8 @@ final class LiveConfig {
 
     /// Clears every credential / identity value back to empty (environment falls back to `test`).
     func resetCredentials() {
-        lock.wirexWithLock { credentials.removeAll() }
+        // The launch environment's values survive a reset: they rank above the Config tab.
+        lock.wirexWithLock { credentials = pinned }
         diag.config("reset all")
         announceCredentialsChange()
     }
@@ -220,9 +242,14 @@ final class LiveConfig {
     /// an expired `action_token` and a missing one fail identically at the API, and knowing which is
     /// the difference between pasting a new token and hunting a bug.
     func credentialsStatus() -> String {
-        ["bearer", "actionToken", "cardId", "cardholderName", "email", "wallet"].map { key in
+        ["bearer", "actionToken", "cardId", "cardholderName", "email", "wallet", "companyId", "ownerKey"].map { key in
             let value = credential(key)
             guard !value.isEmpty else { return "\(key): —" }
+            // SECURITY: a key shows as the address it signs for, never its length or a digest.
+            if key == "ownerKey" {
+                let signer = try? TestOnlySigner(hexKey: value)
+                return "ownerKey: " + (signer.map { "set · signs as \($0.address)" } ?? "set · not a valid key")
+            }
             // Length and a short digest, so a value mangled in transit is VISIBLE rather than
             // inferred. iOS text substitution can rewrite a `-` inside a JWT into an en dash; the
             // result still parses as JSON and still looks like a token, and the only symptom is a
@@ -339,5 +366,31 @@ final class LiveConfig {
               let claims = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let exp = claims["exp"] as? Double else { return nil }
         return Date(timeIntervalSince1970: exp)
+    }
+}
+
+/// The Trade tab's highest config source: the launch environment, from the Xcode scheme or `SIMCTL_CHILD_*`.
+enum LaunchEnvironment {
+    static let names: [String: String] = [
+        "WIREX_ENVIRONMENT": "environment",
+        "WIREX_CHAIN_ID": "chainId",
+        "WIREX_COMPANY_ID": "companyId",
+        "WIREX_OWNER_KEY": "ownerKey",
+        "WIREX_BAAS_API_URL": "baasApiUrl",
+    ]
+
+    // SECURITY: a debug build only, so a distributed build never takes a key from its environment.
+    static func values() -> [String: String] {
+        #if DEBUG
+        let environment = ProcessInfo.processInfo.environment
+        var out: [String: String] = [:]
+        for (variable, key) in names {
+            let value = environment[variable]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !value.isEmpty { out[key] = value }
+        }
+        return out
+        #else
+        return [:]
+        #endif
     }
 }

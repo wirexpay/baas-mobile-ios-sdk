@@ -19,15 +19,17 @@ final class ConfigViewController: UIViewController {
     private struct FieldSpec { let key: String; let label: String; let hint: String?; let secure: Bool }
     private static let integration: [FieldSpec] = [
         FieldSpec(key: "chainId", label: "Chain ID", hint: "X-Chain-Id — Wirex assigns per integration", secure: false),
+        FieldSpec(key: "companyId", label: "Company ID", hint: "X-Company-Id — the Trade login names the user's company", secure: false),
         FieldSpec(key: "email", label: "User email", hint: "X-User-Email", secure: false),
         FieldSpec(key: "wallet", label: "User wallet", hint: "X-User-Wallet (EOA)", secure: false),
         FieldSpec(key: "cardId", label: "Card ID", hint: "the card Reveal / Collect act on", secure: false),
         FieldSpec(key: "cardholderName", label: "Cardholder name", hint: nil, secure: false),
-        FieldSpec(key: "baasApiUrl", label: "BaaS API URL", hint: "for the Wallet \u{201C}Fetch estimate\u{201D} helper", secure: false),
+        FieldSpec(key: "baasApiUrl", label: "BaaS API URL", hint: "the https host, no path — the Trade login and the Wallet \u{201C}Fetch estimate\u{201D} helper", secure: false),
     ]
     private static let secrets: [FieldSpec] = [
-        FieldSpec(key: "bearer", label: "Bearer token", hint: "getAccessToken — Wirex bearer for the user", secure: true),
+        FieldSpec(key: "bearer", label: "Bearer token", hint: "getAccessToken — Wirex bearer for the user; wins over the Trade login", secure: true),
         FieldSpec(key: "actionToken", label: "Step-up action token", hint: "getActionToken — card data / PIN", secure: true),
+        FieldSpec(key: "ownerKey", label: "Owner key (testing only)", hint: "the test user's exported key — signs the Trade login and each trade", secure: true),
     ]
 
     override func viewDidLoad() {
@@ -296,8 +298,12 @@ final class ConfigViewController: UIViewController {
             label.font = .systemFont(ofSize: 14, weight: .bold)
             label.textColor = Theme.text
 
+            // A launch-environment value outranks this tab, so its field is read-only and says why.
+            let pinned = LiveConfig.shared.isPinned(spec.key)
+            field.isEnabled = !pinned
+            field.alpha = pinned ? 0.5 : 1
             var stack: [UIView] = [label]
-            if let hint = spec.hint {
+            if let hint = pinned ? "set by the launch environment" : spec.hint {
                 let hintLabel = UILabel()
                 hintLabel.text = hint
                 hintLabel.font = .systemFont(ofSize: 12)
@@ -324,7 +330,10 @@ final class ConfigViewController: UIViewController {
 
     private func syncEnvironmentChips() {
         let current = LiveConfig.shared.environment
+        let pinned = LiveConfig.shared.isPinned("environment")
         for chip in environmentChips {
+            chip.isEnabled = !pinned
+            chip.alpha = pinned ? 0.5 : 1
             let on = chip.currentTitle == current
             chip.backgroundColor = on ? Theme.accent : Theme.surface
             chip.layer.borderColor = (on ? Theme.accent : Theme.border).cgColor
@@ -350,9 +359,9 @@ final class ConfigViewController: UIViewController {
     @objc private func resetAll() {
         diag.tap("Reset all")
         LiveConfig.shared.resetCredentials()
-        fields.forEach { $0.text = "" }
-        syncEnvironmentChips()
-        refreshStatus()
+        // The launch environment's values survive the reset, so the fields re-read the store.
+        view.endEditing(true)
+        syncFields()
     }
 
     @objc private func dismissKeyboard() { view.endEditing(true) }

@@ -130,11 +130,14 @@ final class DiagLog {
     private static let jwt = try! NSRegularExpression(pattern: "eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]+\\.?[A-Za-z0-9_-]*")
     private static let digits = try! NSRegularExpression(pattern: "(?<![0-9])[0-9]{13,19}(?![0-9])")
     private static let address = try! NSRegularExpression(pattern: "0x([0-9a-fA-F]{4})[0-9a-fA-F]{32}([0-9a-fA-F]{4})")
+    /// 32 bytes of hex: a private key, or a hash. Masked before the address rule could leave its tail.
+    private static let hex32 = try! NSRegularExpression(pattern: "(0x)?[0-9a-fA-F]{64}")
 
     // SECURITY: the last guard before a line is stored and shared. A token, a PAN-length number or a
     // wallet address is masked whatever path it arrived by; nothing above relies on callers alone.
     static func redact(_ message: String) -> String {
         var s = message
+        s = hex32.stringByReplacingMatches(in: s, range: NSRange(s.startIndex..., in: s), withTemplate: "<hex32>")
         s = jwt.stringByReplacingMatches(in: s, range: NSRange(s.startIndex..., in: s), withTemplate: "<jwt>")
         s = digits.stringByReplacingMatches(in: s, range: NSRange(s.startIndex..., in: s), withTemplate: "<digits>")
         s = address.stringByReplacingMatches(in: s, range: NSRange(s.startIndex..., in: s), withTemplate: "0x$1…$2")
