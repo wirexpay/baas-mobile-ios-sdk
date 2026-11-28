@@ -17,13 +17,13 @@ the provider block, or fetches an estimate with your bearer.
 | Field | What it is | Who gives it |
 |---|---|---|
 | `chainId` | `X-Chain-Id` — the chain the partner operates on | **Wirex**, per integration |
-| `companyId` | `X-Company-Id` on the Trade login — the company the test user belongs to | **Wirex**, per integration |
+| `companyId` | `X-Company-Id` on the login the Trade and Crypto tabs share — the company the test user belongs to | **Wirex**, per integration |
 | `clientId` | `?client=` on the hosted pages (optional) | **Wirex** |
 | `userEmail` / `userWallet` | identity headers `X-User-Email` / `X-User-Wallet` | partner (the signed-in user) |
 | `cardId` | the card Reveal / Collect act on | partner (a provisioned card) |
 | `cardholderName` | display name on Collect | partner |
 | `walletAmount` / `walletCurrency` / `walletProvider` | the top-up quote the Wallet screens arm with | partner (from an estimate) |
-| `baasApiUrl` | the BaaS API host (https, no path). The Trade login and the Wallet screen's **Fetch estimate** helper call it; pricing is the partner backend's job, the helper only verifies a bearer | **Wirex**, per environment |
+| `baasApiUrl` | the BaaS API host (https, no path). The Trade and Crypto login calls it, and so does the Wallet screen's **Fetch estimate** helper. Pricing is the partner backend's job; the helper only verifies a bearer | **Wirex**, per environment |
 | `returnUrl` | Custom Tab App Link — **https, verified for this app's package** (`assetlinks.json`) | partner |
 
 ### Secrets (memory only — never persisted, never logged)
@@ -32,11 +32,11 @@ the provider block, or fetches an estimate with your bearer.
 | `bearer` | `getAccessToken` — Wirex bearer for the user | minted by the partner's auth |
 | `actionToken` | `getActionToken` — step-up for card data / PIN | the user's **wallet signature**, exchanged by the partner's backend |
 | `checkoutToken` | token mode — the short-lived top-up token | minted by the **partner's backend** |
-| `ownerKey` | **TESTING ONLY.** The test user's exported private key. It signs the Trade login and each trade step. A pasted `bearer` wins over the login | the user's **own wallet**, which signs; a real app never holds a key |
+| `ownerKey` | **TESTING ONLY.** The test user's exported private key. It signs the login and each trade and send step on the Trade and Crypto tabs. A pasted `bearer` wins over the login | the user's **own wallet**, which signs; a real app never holds a key |
 
 ### Where the values come from
 
-The four Trade fields are `environment`, `chainId`, `companyId` and `ownerKey`. A higher source wins over a lower one.
+The four fields the Trade and Crypto tabs share are `environment`, `chainId`, `companyId` and `ownerKey`. A higher source wins over a lower one.
 
 | Order | Source | Notes |
 |---|---|---|
@@ -70,6 +70,7 @@ CI checkouts never have the file, so no distributed build carries a key.
 | **Wallet — Apple Pay / Google Pay** | environment, chainId, bearer, walletProvider, walletAmount/Currency; paste the estimation id + provider config on the Wallet screen |
 | **Wallet — token mode** | the above + a `checkoutToken` your backend minted |
 | **Trade** (stocks and coins) | environment, chainId, ownerKey; and companyId with baasApiUrl for the login, or a pasted bearer. A full trade runs only on `production`, where the tab refuses a trade worth more than 10 USD |
+| **Crypto** (sends and deposit addresses) | the same as Trade. On `production` the tab refuses a send worth more than 10 USD, the fee included. USDC, USDT and WUSD count at face value, EURC and WEUR at 1.25 USD, and no other token is sent |
 
 ## Credentials in a real integration
 

@@ -47,6 +47,42 @@ enum TradeGuards {
         )
     }
 
+    /// What a send's token counts as in USD: dollar coins at face value, euro coins at 1.25.
+    static let sendRates: [String: Decimal] = [
+        "USDC": 1, "USDT": 1, "WUSD": 1, "EURC": Decimal(string: "1.25")!, "WEUR": Decimal(string: "1.25")!,
+    ]
+
+    // SECURITY: a send's worth meets the cap; on production a token with no rate here is refused.
+    static func sendRefusal(environment: String, symbol: String, amount: Decimal) -> String? {
+        guard environment == "production" else { return nil }
+        guard let rate = sendRates[symbol.uppercased()] else {
+            return "refused: on production the tab sends only USDC, USDT, WUSD, EURC or WEUR, not \(symbol)"
+        }
+        return refusal(environment: environment, usd: amount * rate)
+    }
+
+    /// What leaves on a send, the fee included: the unwrap when the quote has one, otherwise the pay token.
+    static func leaving(_ quote: WirexSendQuote) -> (token: String, units: String) {
+        quote.unwrap.map { ($0.token, $0.units) } ?? (quote.payToken, quote.payUnits)
+    }
+
+    // SECURITY: what leaves at Send and Resume, valued by its symbol and decimals from a fresh balances
+    // read. `paying` is nil when that read has no row for the token, which is refused.
+    static func sendRefusal(environment: String, units: String, paying: (symbol: String, decimals: Int)?) -> String? {
+        guard environment == "production" else { return nil }
+        guard let paying else { return "refused: the paying token is not among the main account's balances" }
+        guard let amount = value(units: units, decimals: paying.decimals) else {
+            return "refused: the send's value is not a number"
+        }
+        return sendRefusal(environment: environment, symbol: paying.symbol, amount: amount)
+    }
+
+    static func sendRefusal(environment: String, quote: WirexSendQuote, balances: [WirexCryptoBalance]) -> String? {
+        let (token, units) = leaving(quote)
+        let row = balances.first { $0.token.lowercased() == token.lowercased() }
+        return sendRefusal(environment: environment, units: units, paying: row.map { ($0.symbol, $0.decimals) })
+    }
+
     /// Decimal text as a tester types it, such as `5` or `2.50`. Nil when it is not a positive amount.
     static func usd(_ text: String) -> Decimal? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
