@@ -3,7 +3,7 @@ import WirexMobileSDK
 
 /// The Trade tab: stocks and coins through the SDK's `WirexTrade`, with the same panels, buttons and
 /// wording on every platform's example. The tab signs with the test user's key, held in memory.
-final class TradeViewController: UIViewController {
+final class TradeViewController: UIViewController, PanelBuilding {
 
     private let scrollView = UIScrollView()
     private var keyboardAvoider: KeyboardAvoider?
@@ -140,22 +140,8 @@ final class TradeViewController: UIViewController {
         scrollView.addGestureRecognizer(tap)
     }
 
-    /// Who signs, where, and where the bearer comes from. The key shows only as its address.
     @objc private func refreshSigner() {
-        let config = LiveConfig.shared
-        let key = config.credential("ownerKey")
-        let signs: String
-        if key.isEmpty {
-            signs = "no ownerKey: set it on the Config tab or in the launch environment"
-        } else if let signer = try? TestOnlySigner(hexKey: key) {
-            signs = "signs as \(signer.address)"
-        } else {
-            signs = "ownerKey is not a 32-byte hex private key"
-        }
-        let chain = config.credential("chainId").isEmpty ? "—" : config.credential("chainId")
-        let company = config.credential("companyId").isEmpty ? "—" : config.credential("companyId")
-        let bearer = config.credential("bearer").isEmpty ? "from the login with ownerKey" : "pasted, wins over the login"
-        signerLabel.text = "environment \(config.environment) · chain \(chain)\ncompany \(company)\n\(signs)\nbearer \(bearer)"
+        signerLabel.text = signerSummary()
         syncButtons()
     }
 
@@ -237,7 +223,7 @@ final class TradeViewController: UIViewController {
         run("Get quote", quoteLabel) { trade in
             let quote = try await trade.quote(market: market, side: side, symbol: symbol, amount: text)
             self.quote = quote
-            self.quoteScope = Self.scope()
+            self.quoteScope = self.configScope()
             // SECURITY: the quote's own worth meets the cap; a refused quote cannot be executed.
             let refusal = TradeGuards.refusal(environment: environment, quote: quote)
             self.quoteExecutable = refusal == nil
@@ -248,7 +234,7 @@ final class TradeViewController: UIViewController {
 
     @objc private func executeQuote() {
         guard let quote, quoteExecutable else { return fail(tradeLabel, "get a quote first") }
-        guard quoteScope == Self.scope() else { return fail(tradeLabel, "the config changed since the quote: get a new quote") }
+        guard quoteScope == configScope() else { return fail(tradeLabel, "the config changed since the quote: get a new quote") }
         // SECURITY: the cap again at Execute, on the environment as it stands now.
         if let refusal = TradeGuards.refusal(environment: LiveConfig.shared.environment, quote: quote) {
             quoteExecutable = false
@@ -344,8 +330,8 @@ final class TradeViewController: UIViewController {
         var parts = [event.step.rawValue.padding(toLength: 12, withPad: " ", startingAt: 0), event.state.rawValue]
         if let status = event.status { parts.append(status) }
         if let reason = event.reason { parts.append(reason) }
-        if let hash = event.userOpHash { parts.append("userOp \(Self.short(hash))") }
-        if let hash = event.transactionHash { parts.append("tx \(Self.short(hash))") }
+        if let hash = event.userOpHash { parts.append("userOp \(short(hash))") }
+        if let hash = event.transactionHash { parts.append("tx \(short(hash))") }
         label.text = parts.joined(separator: " · ")
         label.textColor = event.state == .failed ? Theme.pink : (event.state == .done ? Theme.green : Theme.textDim)
     }
@@ -415,13 +401,6 @@ final class TradeViewController: UIViewController {
 
     // MARK: - Formatting
 
-    /// The environment, chain and key a quote belongs to.
-    private static func scope() -> String {
-        let config = LiveConfig.shared
-        let address = (try? TestOnlySigner(hexKey: config.credential("ownerKey")))?.address ?? ""
-        return [config.environment, config.credential("chainId"), address].joined(separator: "|")
-    }
-
     static func describe(_ quote: WirexTradeQuote) -> String {
         let usdc = quote.side == .buy
         let inName = usdc ? "USDC" : quote.symbol
@@ -449,96 +428,11 @@ final class TradeViewController: UIViewController {
         return "\(value)"
     }
 
-    private static func short(_ hash: String) -> String {
-        hash.count > 14 ? "\(hash.prefix(8))…\(hash.suffix(6))" : hash
-    }
-
-    // MARK: - Styling helpers, as the Config tab draws them
-
-    private func style(_ label: UILabel) {
-        label.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        label.textColor = Theme.textDim
-        label.numberOfLines = 0
-    }
-
     @objc private func dismissKeyboard() { view.endEditing(true) }
 
-    private func titleLabel(_ text: String) -> UILabel {
-        let label = UILabel()
-        label.text = text
-        label.font = .systemFont(ofSize: 24, weight: .heavy)
-        label.textColor = Theme.text
-        return label
-    }
-
-    private func caption(_ text: String) -> UILabel {
-        let label = UILabel()
-        label.text = text
-        label.font = .systemFont(ofSize: 13)
-        label.textColor = Theme.textDim
-        label.numberOfLines = 0
-        return label
-    }
-
-    private func hint(_ text: String) -> UILabel {
-        let label = caption(text)
-        label.font = .systemFont(ofSize: 12)
-        label.textColor = Theme.textFaint
-        return label
-    }
-
-    private func sectionLabel(_ text: String) -> UILabel {
-        let label = UILabel()
-        label.text = text.uppercased()
-        label.font = .systemFont(ofSize: 12, weight: .heavy)
-        label.textColor = Theme.textFaint
-        return label
-    }
-
-    private func labeled(_ name: String, _ control: UIView) -> UIView {
-        let label = UILabel()
-        label.text = name
-        label.font = .systemFont(ofSize: 14, weight: .bold)
-        label.textColor = Theme.text
-        label.widthAnchor.constraint(equalToConstant: 72).isActive = true
-        let row = UIStackView(arrangedSubviews: [label, control])
-        row.axis = .horizontal
-        row.alignment = .center
-        row.spacing = 10
-        return row
-    }
-
-    private func card(_ views: [UIView]) -> UIView {
-        let stack = UIStackView(arrangedSubviews: views)
-        stack.axis = .vertical
-        stack.spacing = 12
-        stack.isLayoutMarginsRelativeArrangement = true
-        stack.layoutMargins = UIEdgeInsets(top: 14, left: 14, bottom: 14, right: 14)
-        stack.backgroundColor = Theme.surface
-        stack.layer.cornerRadius = 20
-        stack.layer.borderWidth = 1
-        stack.layer.borderColor = Theme.border.cgColor
-        return stack
-    }
-
-    private func buttonRow(_ buttons: UIButton...) -> UIView {
-        let row = UIStackView(arrangedSubviews: buttons + [UIView()])
-        row.axis = .horizontal
-        row.spacing = 8
-        return row
-    }
-
     private func button(_ title: String, _ action: Selector) -> UIButton {
-        let button = UIButton(type: .custom)
-        button.setTitle(title, for: .normal)
-        button.setTitleColor(Theme.onAccent, for: .normal)
-        button.titleLabel?.font = .systemFont(ofSize: 14, weight: .bold)
-        button.backgroundColor = Theme.accent
-        button.contentEdgeInsets = UIEdgeInsets(top: 12, left: 18, bottom: 12, right: 18)
-        button.layer.cornerRadius = 14
-        button.accessibilityIdentifier = title
+        let button = pill(title)
         button.addTarget(self, action: action, for: .touchUpInside)
-        button.setContentHuggingPriority(.required, for: .horizontal)
         actionButtons.append(button)
         return button
     }

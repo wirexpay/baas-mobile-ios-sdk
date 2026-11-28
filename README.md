@@ -9,6 +9,8 @@ Wirex card and wallet features for a partner iOS app. The partner app never hand
 - **Wallet top-up** (`WirexWalletCheckoutView`) hosts the Wirex checkout with Apple Pay.
 - **Trade** (`WirexTrade`) buys and sells US stocks and coins from the user's account. It draws no
   view, and the host app signs each step.
+- **Crypto** (`WirexCrypto`) sends from the user's account to any network, and makes deposit
+  addresses. It draws no view, and the host app signs each step.
 
 Use of the SDK requires an agreement with Wirex. See [LICENSE](LICENSE).
 
@@ -72,6 +74,9 @@ Trade takes two objects of its own:
 - a `WirexTradeTokenProvider`, which supplies the user's access token;
 - a `WirexTradeSigner`, which gives the owner's address and signs each 32-byte hash the SDK hands
   it. The SDK never holds a key.
+
+Crypto takes the same two objects: `WirexCryptoTokenProvider` and `WirexCryptoSigner` are aliases of
+the Trade protocols, so one of each serves both.
 
 ## Documentation
 

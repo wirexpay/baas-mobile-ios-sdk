@@ -6,6 +6,9 @@
 - Trade: the host app signs. The SDK hands it a 32-byte hash and takes back 65 bytes; no key enters the SDK. Each step reports through `onStep`, and each failure is a `WirexTradeError` with one reason name.
 - Trade: nothing is kept between calls. `openOrders` and `resume` read where an order stands, so a trade carries on after the app restarts.
 - Example: a **Trade** tab runs a trade end to end. It signs with a test user's key from the launch environment or the Config tab, held in memory only, and logs in with it. It refuses a production trade worth more than 10 USD.
+- Crypto: `WirexCrypto` sends from a main account on Base or Arc, on its own chain or to another network over CCTP, rhino.fi or Across. It also makes deposit addresses and reads them back. `WirexCrypto.create(testMode:chainId:tokenProvider:signer:)` takes the same token provider and signer as `Trade`. It has seven members: `balances`, `quoteSend`, `send`, `resumeSend`, `sendStatus`, `pendingSends` and `depositAddress`.
+- Crypto: nothing is kept between calls. The host keeps each `WirexSendQuote` and `WirexSendResult`; `pendingSends` and `resumeSend` carry a send on, and `sendStatus` reads its delivery. Each failure is a `WirexCryptoError` with one reason name.
+- Example: a **Crypto** tab sends to any network and gets deposit addresses, with the Trade tab's key and login. It holds quotes in memory only, and refuses a production send worth more than 10 USD, the fee included.
 
 ## 0.3.15
 

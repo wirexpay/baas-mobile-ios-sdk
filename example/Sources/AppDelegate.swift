@@ -44,7 +44,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate, UITabBarControlle
         // arm a device without typing. Applied before the tabs are built, so the first read sees it.
         connectionOptions.urlContexts.forEach { LiveConfig.shared.applySeedLink($0.url, source: "launch url") }
 
-        // Seven tabs, the same set and order every platform's example carries. Config is first: a
+        // Eight tabs, the same set and order every platform's example carries. Config is first: a
         // per-field editor over `LiveConfig`, the single store the surfaces read. Reveal DISPLAYS a
         // card the user owns; collect CAPTURES one they type; they share credentials and appearance
         // through `LiveConfig`, and nothing else — the two SDKs are peers and neither imports the other.
@@ -63,12 +63,15 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate, UITabBarControlle
         // Stocks and coins, signed in the app with the test user's key.
         let trade = TradeViewController()
         trade.tabBarItem = UITabBarItem(title: "Trade", image: nil, tag: 5)
+        // Sends to any network and deposit addresses, signed with the same test key.
+        let crypto = CryptoViewController()
+        crypto.tabBarItem = UITabBarItem(title: "Crypto", image: nil, tag: 6)
         // Styling is its own tab because it applies to every surface.
         let appearance = AppearanceViewController()
-        appearance.tabBarItem = UITabBarItem(title: "Appearance", image: nil, tag: 6)
+        appearance.tabBarItem = UITabBarItem(title: "Appearance", image: nil, tag: 7)
 
         let tabs = UITabBarController()
-        tabs.viewControllers = [config, reveal, collect, threeDS, wallet, trade, appearance]
+        tabs.viewControllers = [config, reveal, collect, threeDS, wallet, trade, crypto, appearance]
         tabs.delegate = self
         tabs.viewControllers?.forEach { Self.themeUnderMore($0.navigationItem) }
         // `-wirexScreen collect` opens straight onto the entry screen, so a scripted run does not
@@ -80,7 +83,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate, UITabBarControlle
         case "threeds": tabs.selectedIndex = 3
         case "wallet": tabs.selectedIndex = 4
         case "trade": tabs.selectedIndex = 5
-        case "appearance": tabs.selectedIndex = 6
+        case "crypto": tabs.selectedIndex = 6
+        case "appearance": tabs.selectedIndex = 7
         default: break
         }
 
